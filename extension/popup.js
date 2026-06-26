@@ -11,7 +11,60 @@ document.getElementById('dash-btn').addEventListener('click', () => {
   window.close();
 });
 
+/* ----- shared icon cache (same `ms_icons` store the dashboard populates) ----- */
+const iconCache = new Map();
+const iconInflight = new Map();
+let iconPersistTimer = null;
+
+async function loadIconCache() {
+  try {
+    const d = await chrome.storage.local.get('ms_icons');
+    for (const [k, v] of Object.entries(d.ms_icons || {})) iconCache.set(k, v);
+  } catch { /* ignore */ }
+}
+function scheduleIconPersist() {
+  clearTimeout(iconPersistTimer);
+  iconPersistTimer = setTimeout(() => {
+    const obj = {}; for (const [k, v] of iconCache) obj[k] = v;
+    chrome.storage.local.set({ ms_icons: obj }).catch(() => {});
+  }, 800);
+}
+function blobToDataURL(blob) {
+  return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(blob); });
+}
+function resolveIcon(url) {
+  if (!url || !/^https?:|^data:/.test(url)) return Promise.resolve(null);
+  if (url.startsWith('data:')) return Promise.resolve(url);
+  if (iconCache.has(url)) return Promise.resolve(iconCache.get(url) || null);
+  if (iconInflight.has(url)) return iconInflight.get(url);
+  const p = (async () => {
+    try {
+      const resp = await fetch(url, { credentials: 'omit' });
+      if (!resp.ok) throw 0;
+      const blob = await resp.blob();
+      if (!blob.size || blob.size > 512 * 1024) throw 0;
+      if (blob.type && !blob.type.startsWith('image/')) throw 0;
+      const dataUrl = await blobToDataURL(blob);
+      iconCache.set(url, dataUrl); scheduleIconPersist(); return dataUrl;
+    } catch { iconCache.set(url, ''); scheduleIconPersist(); return null; }
+    finally { iconInflight.delete(url); }
+  })();
+  iconInflight.set(url, p);
+  return p;
+}
+function applyIcon(span, url) {
+  span.textContent = '📜';
+  resolveIcon(url).then((dataUrl) => {
+    if (!dataUrl || !span.isConnected) return;
+    span.textContent = '';
+    const img = document.createElement('img');
+    img.src = dataUrl; img.alt = '';
+    span.appendChild(img);
+  });
+}
+
 async function init() {
+  await loadIconCache();
   let tab;
   try {
     [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -51,14 +104,7 @@ function render(scripts) {
 
     const ic = document.createElement('span');
     ic.className = 'ic';
-    if (s.icon && /^https?:|^data:/.test(s.icon)) {
-      const img = document.createElement('img');
-      img.src = s.icon; img.alt = '';
-      img.onerror = () => { ic.textContent = '📜'; };
-      ic.appendChild(img);
-    } else {
-      ic.textContent = '📜';
-    }
+    applyIcon(ic, s.icon);
 
     const nm = document.createElement('span');
     nm.className = 'nm';
