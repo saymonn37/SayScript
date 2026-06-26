@@ -16,6 +16,10 @@ matching page pick up the change instantly. Drop your Tampermonkey scripts into
 ![php](https://img.shields.io/badge/PHP-8.1%2B-6ee7ff)
 ![license](https://img.shields.io/badge/license-MIT-22c55e)
 
+<br>
+
+<img src="docs/screenshot.png" width="900" alt="SayScript dashboard — script list with enable/disable dots, a syntax-highlighting editor, metadata badges, and import/export">
+
 </div>
 
 ---
