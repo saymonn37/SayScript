@@ -125,6 +125,22 @@ html, body {
 .script-item.disabled .si-dot::before { background: var(--text-mute); }
 .script-item.active .si-dot:hover { background: rgba(255, 255, 255, .18); }
 
+.author-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; border-top: 1px solid var(--border-soft);
+}
+.author-label {
+  font-size: 12px; color: var(--text-mute); white-space: nowrap; flex-shrink: 0;
+}
+.author-input {
+  flex: 1; min-width: 0;
+  background: var(--bg-elev2); border: 1px solid var(--border-soft);
+  border-radius: 6px; color: var(--text-dim); font-size: 12px;
+  padding: 4px 8px; font-family: var(--sans);
+}
+.author-input:focus { outline: none; border-color: var(--accent-2); color: var(--text); }
+.author-input::placeholder { color: var(--text-mute); }
+
 .side-foot {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   padding: 10px 12px; border-top: 1px solid var(--border-soft);

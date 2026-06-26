@@ -17,6 +17,7 @@ const $ = (id) => document.getElementById(id);
 const els = {
   conn: $('conn'), connLabel: $('conn-label'),
   filter: $('filter'), list: $('script-list'), count: $('count'),
+  defaultAuthor: $('default-author'),
   newBtn: $('new-btn'), resyncBtn: $('resync-btn'),
   headIcon: $('head-icon'), headName: $('head-name'), headFile: $('head-file'),
   enabled: $('head-enabled'), enabledToggle: $('enabled-toggle'),
@@ -43,17 +44,22 @@ let reconnectDelay = 1000;
 let saveStateTimer = null;
 
 /* Template used for a brand-new script (no modal, no name prompt). */
-const NEW_TEMPLATE =
-  '// ==UserScript==\n' +
-  '// @name        New script\n' +
-  '// @namespace   sayscript\n' +
-  '// @version     1.0.0\n' +
-  '// @description \n' +
-  '// @match       *://*/*\n' +
-  '// @grant       none\n' +
-  '// @run-at      document-idle\n' +
-  '// ==/UserScript==\n\n' +
-  "(function () {\n  'use strict';\n\n})();\n";
+function buildNewTemplate(author) {
+  const authorLine = author ? `// @author       ${author}\n` : '';
+  return (
+    '// ==UserScript==\n' +
+    '// @name         Userscript Title\n' +
+    '// @namespace    SayScript\n' +
+    '// @version      1.0.0\n' +
+    '// @description  -\n' +
+    authorLine +
+    '// @match        https://*/*\n' +
+    '// @icon         https://url/to/icon.png\n' +
+    '// @grant        none\n' +
+    '// ==/UserScript==\n\n' +
+    "(function() {\n    'use strict';\n\n    // Your code here...\n})();\n"
+  );
+}
 
 /* ===========================================================================
  * WebSocket
@@ -406,14 +412,16 @@ function flashSave(text, color) {
 
 /** Start a brand-new script in the editor — NO modal, NO name prompt. The
  *  filename is derived from @name (and made unique) on first save. */
-function newScript() {
+async function newScript() {
   if ((dirty || isNewDraft) && (current || isNewDraft)) {
     const what = current || 'the new script';
     if (dirty && !confirm('Discard unsaved changes to ' + what + '?')) return;
   }
+  const { default_author: author = '' } = await chrome.storage.local.get('default_author');
+  const tpl = buildNewTemplate(author);
   current = null;
   isNewDraft = true;
-  els.code.value = NEW_TEMPLATE;
+  els.code.value = tpl;
   els.code.disabled = false;
   els.saveBtn.disabled = false;
   els.deleteBtn.disabled = true;   // nothing on disk to delete yet
@@ -423,12 +431,12 @@ function newScript() {
   els.headName.textContent = 'New script';
   els.headFile.textContent = '(unsaved — Ctrl+S to create)';
   els.headIcon.hidden = true;
-  renderMeta(parseMetaClient(NEW_TEMPLATE));
+  renderMeta(parseMetaClient(tpl));
   dirty = true; updateDirty();
   refreshHighlight();
   els.code.focus();
   // place cursor inside the IIFE body
-  const idx = NEW_TEMPLATE.indexOf("'use strict';") + "'use strict';\n\n".length;
+  const idx = tpl.indexOf('// Your code here...') + '// Your code here...\n'.length;
   els.code.selectionStart = els.code.selectionEnd = idx;
   updateCursor();
   renderList();
@@ -1040,6 +1048,13 @@ async function syncEnabledFromBackground() {
 
 (async function init() {
   els.serverInfo.textContent = WS_URL;
+
+  const { default_author: savedAuthor = '' } = await chrome.storage.local.get('default_author');
+  els.defaultAuthor.value = savedAuthor;
+  els.defaultAuthor.addEventListener('change', () => {
+    chrome.storage.local.set({ default_author: els.defaultAuthor.value.trim() });
+  });
+
   await Promise.all([syncEnabledFromBackground(), loadIconCache()]);
   clearEditor();
   connect();
