@@ -59,16 +59,16 @@ a WebSocket server) is fetched by Composer; everything else is vanilla.
 **Linux / macOS**
 
 ```bash
-git clone https://github.com/<you>/sayscript.git
-cd sayscript
+git clone https://github.com/saymonn37/SayScript.git
+cd SayScript
 ./start.sh
 ```
 
 **Windows**
 
 ```bat
-git clone https://github.com/<you>/sayscript.git
-cd sayscript
+git clone https://github.com/saymonn37/SayScript.git
+cd SayScript
 start.bat
 ```
 
