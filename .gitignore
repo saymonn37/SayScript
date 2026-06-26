@@ -1,0 +1,18 @@
+# PHP dependencies (restored with `composer install`)
+/server/vendor/
+
+# Logs & runtime junk
+*.log
+console_error.log
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+.idea/
+.vscode/
+
+# Note: your personal userscripts in /scripts are ignored by scripts/.gitignore
+# composer.lock IS committed (reproducible installs) — see server/.gitignore

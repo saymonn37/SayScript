@@ -1,0 +1,5 @@
+# Your personal userscripts stay LOCAL — never committed to git.
+# Only the bundled example and this file are tracked.
+*
+!.gitignore
+!example.user.js

@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "SayScript",
+  "version": "1.0.0",
+  "description": "Real-time two-way sync between local .user.js files and the browser. Tampermonkey-compatible dev userscript manager.",
+  "minimum_chrome_version": "120",
+  "permissions": [
+    "storage",
+    "scripting",
+    "activeTab",
+    "userScripts",
+    "tabs"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "options_page": "options.html",
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "action": {
+    "default_title": "SayScript",
+    "default_popup": "popup.html"
+  },
+  "icons": {
+    "128": "icons/icon128.png"
+  }
+}

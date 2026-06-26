@@ -1,0 +1,5 @@
+# Normalize line endings. Shell scripts must stay LF even on Windows checkouts;
+# Windows batch files must be CRLF.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.png binary

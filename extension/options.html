@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SayScript Dashboard</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Sidebar -------------------------------------------------------- -->
+    <aside id="sidebar">
+      <header class="side-head">
+        <div class="brand">
+          <img class="brand-mark" src="assets/logo.png" alt="SayScript logo">
+          <span class="brand-name">SayScript</span>
+        </div>
+        <div id="conn" class="conn conn--off" title="Server connection">
+          <span class="dot"></span><span id="conn-label">offline</span>
+        </div>
+      </header>
+
+      <div class="side-tools">
+        <input id="filter" type="search" placeholder="Filter scripts…" autocomplete="off">
+        <button id="new-btn" class="btn btn--ghost" title="New script">+ New</button>
+      </div>
+
+      <ul id="script-list" class="script-list"></ul>
+
+      <footer class="side-foot">
+        <span id="count">0 scripts</span>
+        <div class="foot-actions">
+          <button id="import-btn" class="btn btn--ghost" title="Import a Tampermonkey .zip backup">Import</button>
+          <button id="export-btn" class="btn btn--ghost" title="Export all scripts as a Tampermonkey .zip backup">Export</button>
+          <button id="resync-btn" class="btn btn--ghost" title="Re-inject all scripts">↻</button>
+        </div>
+        <input id="import-file" type="file" accept=".zip,application/zip" hidden>
+      </footer>
+    </aside>
+
+    <!-- Editor --------------------------------------------------------- -->
+    <main id="main">
+      <header id="editor-head" class="editor-head">
+        <div class="title-group">
+          <img id="head-icon" class="head-icon" alt="" hidden>
+          <div>
+            <div id="head-name" class="head-name">No script selected</div>
+            <div id="head-file" class="head-file"></div>
+          </div>
+        </div>
+        <div class="head-actions">
+          <label id="enabled-toggle" class="toggle" title="Enable / disable injection" hidden>
+            <input id="head-enabled" type="checkbox" checked>
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            <span class="toggle-label">Enabled</span>
+          </label>
+          <span id="dirty" class="dirty" hidden>● unsaved</span>
+          <span id="save-state" class="save-state"></span>
+          <button id="save-btn" class="btn btn--primary" disabled>Save <kbd>Ctrl</kbd>+<kbd>S</kbd></button>
+          <button id="delete-btn" class="btn btn--danger" disabled>Delete</button>
+          <button id="close-btn" class="btn btn--ghost" title="Close editor (Esc)" hidden>✕ Close</button>
+        </div>
+      </header>
+
+      <section id="meta-bar" class="meta-bar"></section>
+
+      <!-- Self-contained highlighting editor (no external/CDN code: MV3 CSP
+           forbids remote scripts on extension pages). -->
+      <div id="editor-wrap" class="editor-wrap">
+        <div id="gutter" class="gutter"></div>
+        <div class="code-scroll" id="code-scroll">
+          <pre id="highlight" class="highlight" aria-hidden="true"><code id="highlight-code"></code></pre>
+          <textarea id="code" class="code-input" spellcheck="false" autocomplete="off"
+                    autocapitalize="off" wrap="off" placeholder="Select a script on the left, or create a new one."></textarea>
+        </div>
+      </div>
+
+      <footer id="status" class="status-bar">
+        <span id="pos">Ln 1, Col 1</span>
+        <span id="server-info">ws://localhost:3000</span>
+      </footer>
+    </main>
+  </div>
+
+  <!-- Import progress overlay ----------------------------------------- -->
+  <dialog id="import-dialog">
+    <div class="dialog-form">
+      <h3 id="import-title">Importing backup…</h3>
+      <p id="import-status" class="hint"></p>
+      <div id="import-progress" class="progress" hidden><div id="import-bar" class="progress-bar"></div></div>
+      <div id="import-errors" class="import-errors" hidden></div>
+      <menu>
+        <button id="import-close" class="btn btn--primary" disabled>Close</button>
+      </menu>
+    </div>
+  </dialog>
+
+  <script src="zip.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>
