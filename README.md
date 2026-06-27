@@ -96,7 +96,7 @@ the server on `ws://localhost:8165`. You should see:
 cd server
 composer install
 php server.php                       # defaults: port 8165, ../scripts, poll 1.0s
-php server.php --port=3001 --dir=/path/to/scripts --interval=0.5
+php server.php --port=8166 --dir=/path/to/scripts --interval=0.5
 ```
 </details>
 
@@ -200,7 +200,7 @@ sayscript/
 
 | Symptom | Fix |
 |---|---|
-| Badge grey / dashboard says **offline** | The server isn't running, or something else holds port 8165. Restart `./start.sh` (or `start.bat`), or pass `--port=3001`. |
+| Badge grey / dashboard says **offline** | The server isn't running, or something else holds port 8165. Restart `./start.sh` (or `start.bat`), or pass `--port=8166`. |
 | **Scripts don't inject** | Enable **“Allow user scripts”** on the extension's Details page. Check the service-worker console (`chrome://extensions` → SayScript → *Inspect views: service worker*) for `registered N/M script(s)`. |
 | **`GM_xmlhttpRequest` fails** | Use the GM API for cross-origin calls — a plain `fetch()` inside your script is still subject to page CORS. The worker logs the real error in the service-worker console. |
 | **Changed `server.php` but nothing changed** | PHP doesn't hot-reload — stop the server (Ctrl+C) and start it again. |

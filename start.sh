@@ -8,9 +8,9 @@
 #
 # Usage:
 #   ./start.sh                       # defaults: port 8165, ./scripts, poll 1.0s
-#   ./start.sh --port 3001
+#   ./start.sh --port 8166
 #   ./start.sh --dir /path/to/scripts --interval 0.5
-#   PORT=3001 ./start.sh             # env vars also work
+#   PORT=8166 ./start.sh             # env vars also work
 #
 set -euo pipefail
 
