@@ -7,7 +7,7 @@
 **A developer-grade userscript manager with real-time, two-way sync between `.user.js` files on disk and your browser.**
 
 Edit a script in the dashboard → the file on disk is overwritten instantly.
-Edit a file in your editor (VS Code, Vim, Claude Code…) → the dashboard and every
+Edit a file in your editor (VS Code, Vim, etc.) → the dashboard and every
 matching page pick up the change instantly. Drop your Tampermonkey scripts into
 `scripts/` and they just work.
 

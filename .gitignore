@@ -5,6 +5,9 @@
 *.log
 console_error.log
 
+# Local-only agent context — never tracked or published
+CLAUDE.md
+
 # OS / editor cruft
 .DS_Store
 Thumbs.db
