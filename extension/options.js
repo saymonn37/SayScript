@@ -213,7 +213,7 @@ function resolveIcon(url) {
       const resp = await fetch(url, { credentials: 'omit' });
       if (!resp.ok) throw new Error('status ' + resp.status);
       const blob = await resp.blob();
-      if (!blob.size || blob.size > 512 * 1024) throw new Error('bad size');
+      if (!blob.size || blob.size > 2 * 1024 * 1024) throw new Error('bad size');
       if (blob.type && !blob.type.startsWith('image/')) throw new Error('not an image');
       const dataUrl = await blobToDataURL(blob);
       iconCache.set(url, dataUrl);
