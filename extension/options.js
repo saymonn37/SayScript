@@ -10,7 +10,7 @@
  *   - Enable/disable toggles are forwarded to the background worker.
  * ======================================================================== */
 
-const WS_URL = 'ws://localhost:3000';
+const WS_URL = 'ws://localhost:8165';
 
 /* ---------------- DOM refs ---------------- */
 const $ = (id) => document.getElementById(id);

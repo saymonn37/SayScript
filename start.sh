@@ -4,10 +4,10 @@
 #
 # Checks prerequisites, installs Composer deps on first run, makes sure the
 # scripts/ folder exists, frees the port if something is stuck on it, then
-# starts the PHP WebSocket server the extension connects to (ws://localhost:3000).
+# starts the PHP WebSocket server the extension connects to (ws://localhost:8165).
 #
 # Usage:
-#   ./start.sh                       # defaults: port 3000, ./scripts, poll 1.0s
+#   ./start.sh                       # defaults: port 8165, ./scripts, poll 1.0s
 #   ./start.sh --port 3001
 #   ./start.sh --dir /path/to/scripts --interval 0.5
 #   PORT=3001 ./start.sh             # env vars also work
@@ -19,7 +19,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SERVER_DIR="$SCRIPT_DIR/server"
 
 # --- defaults (overridable by env or flags) ----------------------------------
-PORT="${PORT:-3000}"
+PORT="${PORT:-8165}"
 SCRIPTS_DIR="${SCRIPTS_DIR:-$SCRIPT_DIR/scripts}"
 INTERVAL="${INTERVAL:-1.0}"
 

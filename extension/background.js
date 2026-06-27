@@ -2,7 +2,7 @@
  * SayScript — background service worker (MV3, module).
  *
  *   - Maintains a resilient WebSocket connection to the PHP server
- *     (ws://localhost:3000) with automatic reconnect + keepalive.
+ *     (ws://localhost:8165) with automatic reconnect + keepalive.
  *   - Keeps the script set in memory + chrome.storage.local (survives the SW
  *     being torn down).
  *   - Registers every enabled script with chrome.userScripts so the browser
@@ -11,7 +11,7 @@
  *     GM storage messages coming back from the userscript world.
  * ======================================================================== */
 
-const WS_URL = 'ws://localhost:3000';
+const WS_URL = 'ws://localhost:8165';
 
 /* -------------------------- in-memory state ------------------------------ */
 

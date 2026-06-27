@@ -3,7 +3,7 @@
  * SayScript — local development WebSocket server.
  *
  * Responsibilities:
- *   - Run a WebSocket server (default ws://localhost:3000) from the CLI.
+ *   - Run a WebSocket server (default ws://localhost:8165) from the CLI.
  *   - Watch the `scripts/` folder for changes to *.user.js files using a
  *     non-blocking periodic poll on the ReactPHP event loop.
  *   - Parse Tampermonkey-style metadata blocks (@name, @match, @include, @icon, ...).
@@ -17,7 +17,7 @@
  *        script_changed     { type, script }
  *        script_deleted     { type, filename }
  *
- * Usage:  php server.php [--port=3000] [--dir=../scripts] [--interval=1.0]
+ * Usage:  php server.php [--port=8165] [--dir=../scripts] [--interval=1.0]
  *
  * Requires:  composer install   (cboden/ratchet)
  */
@@ -40,13 +40,13 @@ $options = getopt('', ['port::', 'dir::', 'interval::', 'help']);
 
 if (isset($options['help'])) {
     fwrite(STDOUT, "SayScript server\n");
-    fwrite(STDOUT, "  --port=3000            WebSocket port\n");
+    fwrite(STDOUT, "  --port=8165            WebSocket port\n");
     fwrite(STDOUT, "  --dir=../scripts       Folder containing .user.js files\n");
     fwrite(STDOUT, "  --interval=1.0         Filesystem poll interval in seconds\n");
     exit(0);
 }
 
-$port       = (int)($options['port'] ?? 3000);
+$port       = (int)($options['port'] ?? 8165);
 $scriptsDir = $options['dir'] ?? (__DIR__ . '/../scripts');
 $interval   = (float)($options['interval'] ?? 1.0);
 

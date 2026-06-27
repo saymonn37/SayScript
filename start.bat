@@ -44,7 +44,7 @@ if not exist "vendor\autoload.php" (
 
 REM --- 3. launch ---
 echo ------------------------------------------------
-echo   Starting server on ws://localhost:3000
+echo   Starting server on ws://localhost:8165
 echo   Load the extension\ folder at chrome://extensions
 echo   ^(Developer mode ON, then "Allow user scripts" on its Details page^).
 echo   Press Ctrl+C to stop.
