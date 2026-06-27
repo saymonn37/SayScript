@@ -8,6 +8,9 @@ console_error.log
 # Local-only agent context — never tracked or published
 CLAUDE.md
 
+# Local-only systemd service builder (machine-specific paths) — not published
+/system-service-builder/
+
 # OS / editor cruft
 .DS_Store
 Thumbs.db
