@@ -264,7 +264,13 @@ function renderList() {
   els.list.innerHTML = '';
   let shown = 0;
   for (const s of items) {
-    if (term && !(s.name || '').toLowerCase().includes(term) && !s.filename.toLowerCase().includes(term)) continue;
+    if (term) {
+      const haystack = [
+        s.name, s.filename, s.namespace, s.description, s.icon,
+        ...(s.matches || []),
+      ].filter(Boolean).map(v => v.toLowerCase());
+      if (!haystack.some(v => v.includes(term))) continue;
+    }
     shown++;
     els.list.appendChild(listItem(s));
   }
