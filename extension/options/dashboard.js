@@ -609,10 +609,10 @@ function applyDefaultAuthor(code, author) {
     meta = meta.replace(authorLine, (m, prefix) => prefix + author);
   } else {
     const insert = '// @author       ' + author;
-    // Place it right after @namespace / @version / @name (whichever comes
-    // first), falling back to just after the opening marker.
-    const anchor = /^[ \t]*\/\/[ \t]*@(?:namespace|version|name)\b.*$/m;
-    if (anchor.test(meta)) meta = meta.replace(anchor, (m) => m + '\n' + insert);
+    // Always add the author line directly BEFORE the first @match; fall back to
+    // just after the opening marker if there's no @match at all.
+    const matchLine = /^[ \t]*\/\/[ \t]*@match\b.*$/m;
+    if (matchLine.test(meta)) meta = meta.replace(matchLine, (m) => insert + '\n' + m);
     else meta = meta.replace('==UserScript==', '==UserScript==\n' + insert);
   }
   return code.slice(0, start) + meta + code.slice(end);
