@@ -62,8 +62,12 @@ $scriptsDir = realpath($scriptsDir) ?: $scriptsDir;
 
 final class ScriptSync implements MessageComponentInterface
 {
+    /** Max number of versions kept per script in .history (oldest pruned). */
+    private const HISTORY_CAP = 50;
+
     private \SplObjectStorage $clients;
     private string $dir;
+    private string $historyDir;
 
     /** filename => ['mtime' => int, 'size' => int] used for change detection */
     private array $snapshots = [];
@@ -72,6 +76,7 @@ final class ScriptSync implements MessageComponentInterface
     {
         $this->clients = new \SplObjectStorage();
         $this->dir     = $dir;
+        $this->historyDir = $dir . DIRECTORY_SEPARATOR . '.history';
         $this->snapshots = $this->snapshotDir();
         $this->log("Watching: {$this->dir} (" . count($this->snapshots) . " script(s) found)");
     }
@@ -124,6 +129,22 @@ final class ScriptSync implements MessageComponentInterface
                 $this->handleDelete($from, $data);
                 break;
 
+            case 'fetch_history':
+                $this->handleFetchHistory($from, $data);
+                break;
+
+            case 'fetch_history_entry':
+                $this->handleFetchHistoryEntry($from, $data);
+                break;
+
+            case 'clear_history':
+                $this->handleClearHistory($from, $data);
+                break;
+
+            case 'clear_all_history':
+                $this->handleClearAllHistory($from);
+                break;
+
             case 'ping':
                 $this->send($from, ['type' => 'pong']);
                 break;
@@ -159,6 +180,9 @@ final class ScriptSync implements MessageComponentInterface
         // back as an external change (prevents an echo / reload loop).
         $this->snapshots[$filename] = ['mtime' => filemtime($path), 'size' => filesize($path)];
 
+        // Snapshot this version into .history (skips no-op saves automatically).
+        $this->saveHistory($filename, $data['code']);
+
         $script = $this->readScript($filename);
 
         // Confirm to the saver, broadcast the fresh content to every OTHER client
@@ -187,6 +211,7 @@ final class ScriptSync implements MessageComponentInterface
         }
         clearstatcache(true, $path);
         $this->snapshots[$filename] = ['mtime' => filemtime($path), 'size' => filesize($path)];
+        $this->saveHistory($filename, $code);
         $script = $this->readScript($filename);
         $this->send($from, ['type' => 'update_ack', 'filename' => $filename, 'script' => $script]);
         $this->broadcast(['type' => 'script_changed', 'script' => $script], $from);
@@ -210,6 +235,167 @@ final class ScriptSync implements MessageComponentInterface
         $this->log("Deleted: {$filename}");
     }
 
+    /* ----- history action handlers ----- */
+
+    private function handleFetchHistory(ConnectionInterface $from, array $data): void
+    {
+        $filename = $this->safeFilename($data['filename'] ?? '');
+        if ($filename === null) {
+            $this->send($from, ['type' => 'error', 'message' => 'Invalid filename']);
+            return;
+        }
+        $this->send($from, [
+            'type'     => 'history_list',
+            'filename' => $filename,
+            'entries'  => $this->listHistory($filename),
+        ]);
+    }
+
+    private function handleFetchHistoryEntry(ConnectionInterface $from, array $data): void
+    {
+        $filename = $this->safeFilename($data['filename'] ?? '');
+        $id       = $this->safeHistoryId($data['id'] ?? '');
+        if ($filename === null || $id === null) {
+            $this->send($from, ['type' => 'error', 'message' => 'Invalid history reference']);
+            return;
+        }
+        $path = $this->historyDirFor($filename) . DIRECTORY_SEPARATOR . $id . '.js';
+        if (!is_file($path)) {
+            $this->send($from, ['type' => 'error', 'message' => 'History version not found']);
+            return;
+        }
+        $this->send($from, [
+            'type'     => 'history_entry',
+            'filename' => $filename,
+            'id'       => $id,
+            'code'     => (string)@file_get_contents($path),
+        ]);
+    }
+
+    private function handleClearHistory(ConnectionInterface $from, array $data): void
+    {
+        $filename = $this->safeFilename($data['filename'] ?? '');
+        if ($filename === null) {
+            $this->send($from, ['type' => 'error', 'message' => 'Invalid filename']);
+            return;
+        }
+        $this->rrmdir($this->historyDirFor($filename));
+        $this->send($from, ['type' => 'history_cleared', 'filename' => $filename]);
+        $this->log("History cleared: {$filename}");
+    }
+
+    private function handleClearAllHistory(ConnectionInterface $from): void
+    {
+        $this->rrmdir($this->historyDir);
+        $this->send($from, ['type' => 'all_history_cleared']);
+        $this->log("History cleared: ALL scripts");
+    }
+
+    /* ----- history storage ----- */
+
+    /** Per-script history folder: .history/<filename>/ */
+    private function historyDirFor(string $filename): string
+    {
+        return $this->historyDir . DIRECTORY_SEPARATOR . $filename;
+    }
+
+    /** Save one version of a script, skipping no-op saves and pruning old ones. */
+    private function saveHistory(string $filename, string $code): void
+    {
+        $dir = $this->historyDirFor($filename);
+        if (!is_dir($dir) && !@mkdir($dir, 0777, true) && !is_dir($dir)) {
+            return; // can't create history dir — silently skip (never break a save)
+        }
+
+        // Skip if identical to the most recent version (avoids spamming versions
+        // when the file is re-saved without real changes).
+        $existing = $this->historyFiles($dir);
+        if ($existing) {
+            $newest = end($existing);
+            if (@file_get_contents($dir . DIRECTORY_SEPARATOR . $newest) === $code) {
+                return;
+            }
+        }
+
+        // Millisecond-stamped, numeric filename; bump on the rare collision.
+        $ts = (int)round(microtime(true) * 1000);
+        do {
+            $path = $dir . DIRECTORY_SEPARATOR . $ts . '.js';
+            $ts++;
+        } while (file_exists($path));
+        @file_put_contents($path, $code, LOCK_EX);
+
+        $this->pruneHistory($dir);
+    }
+
+    /** @return string[] history filenames ("<ts>.js"), oldest first. */
+    private function historyFiles(string $dir): array
+    {
+        if (!is_dir($dir)) {
+            return [];
+        }
+        $files = [];
+        foreach (scandir($dir) ?: [] as $entry) {
+            if (preg_match('/^\d+\.js$/', $entry)) {
+                $files[] = $entry;
+            }
+        }
+        sort($files, SORT_NATURAL); // numeric stamps → chronological
+        return $files;
+    }
+
+    private function pruneHistory(string $dir): void
+    {
+        $files = $this->historyFiles($dir);
+        $excess = count($files) - self::HISTORY_CAP;
+        for ($i = 0; $i < $excess; $i++) {
+            @unlink($dir . DIRECTORY_SEPARATOR . $files[$i]);
+        }
+    }
+
+    /** @return array<int, array{id:string,ts:int,size:int}> newest first. */
+    private function listHistory(string $filename): array
+    {
+        $dir = $this->historyDirFor($filename);
+        $out = [];
+        foreach ($this->historyFiles($dir) as $f) {
+            $id = substr($f, 0, -3); // strip ".js"
+            $out[] = [
+                'id'   => $id,
+                'ts'   => (int)$id,
+                'size' => (int)@filesize($dir . DIRECTORY_SEPARATOR . $f),
+            ];
+        }
+        return array_reverse($out); // newest first
+    }
+
+    /** Accept only a bare numeric history id (path-traversal guard). */
+    private function safeHistoryId($id): ?string
+    {
+        $id = trim((string)$id);
+        return preg_match('/^\d+$/', $id) ? $id : null;
+    }
+
+    /** Recursively delete a directory and its contents (best-effort). */
+    private function rrmdir(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+        foreach (scandir($dir) ?: [] as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            $path = $dir . DIRECTORY_SEPARATOR . $entry;
+            if (is_dir($path)) {
+                $this->rrmdir($path);
+            } else {
+                @unlink($path);
+            }
+        }
+        @rmdir($dir);
+    }
+
     /* ----- the non-blocking watcher (called by a periodic timer) ----- */
 
     public function checkChanges(): void
@@ -223,6 +409,8 @@ final class ScriptSync implements MessageComponentInterface
             if ($prev === null || $prev['mtime'] !== $stat['mtime'] || $prev['size'] !== $stat['size']) {
                 $script = $this->readScript($filename);
                 if ($script !== null) {
+                    // Capture externally-made edits in history too.
+                    $this->saveHistory($filename, (string)$script['code']);
                     $this->broadcast(['type' => 'script_changed', 'script' => $script]);
                     $this->log("Disk change detected: {$filename} -> pushed to " . $this->clients->count() . " client(s)");
                 }
