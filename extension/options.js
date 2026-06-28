@@ -23,7 +23,19 @@ const els = {
   enabled: $('head-enabled'), enabledToggle: $('enabled-toggle'),
   dirty: $('dirty'), saveState: $('save-state'),
   saveBtn: $('save-btn'), deleteBtn: $('delete-btn'), closeBtn: $('close-btn'),
+  historyBtn: $('history-btn'),
   metaBar: $('meta-bar'),
+  // settings drawer
+  settingsBtn: $('settings-btn'), settingsDrawer: $('settings-drawer'),
+  settingsBackdrop: $('settings-backdrop'), settingsClose: $('settings-close'),
+  clearAllBtn: $('clear-all-history-btn'), clearAllConfirm: $('clear-all-confirm'),
+  clearAllInput: $('clear-all-input'), clearAllCancel: $('clear-all-cancel'), clearAllDo: $('clear-all-do'),
+  // history dialog
+  historyDialog: $('history-dialog'), historyFile: $('history-file'),
+  historyList: $('history-list'), historyPreview: $('history-preview-code'),
+  historyEmpty: $('history-empty'), historyMeta: $('history-meta'),
+  historyRestore: $('history-restore'), historyClear: $('history-clear'),
+  historyClose: $('history-close'), historyCloseX: $('history-close-x'),
   gutter: $('gutter'), scroll: $('code-scroll'),
   highlight: $('highlight-code'), code: $('code'),
   pos: $('pos'), serverInfo: $('server-info'),
@@ -42,6 +54,15 @@ let enabledMap = {};            // filename -> bool, mirrored from background
 let socket = null;
 let reconnectDelay = 1000;
 let saveStateTimer = null;
+
+/* history viewer state */
+let historyFor = null;          // filename the dialog is currently showing
+let historyEntries = [];        // [{ id, ts, size }]
+let historySelected = null;     // selected entry id
+const historyCode = new Map();  // id -> code (lazy-fetched, dialog-scoped cache)
+
+/* a script the popup asked us to open straight into the editor */
+let pendingOpen = null;
 
 /* Template used for a brand-new script (no modal, no name prompt). */
 function buildNewTemplate(author) {
@@ -99,6 +120,7 @@ function onMessage(msg) {
       for (const s of msg.scripts) scripts.set(s.filename, s);
       renderList();
       if (current && scripts.has(current)) openScript(current, true);
+      tryOpenPending();
       break;
 
     case 'script_changed': {
@@ -137,6 +159,7 @@ function onMessage(msg) {
           els.enabled.disabled = false;
           els.enabled.checked = enabledMap[msg.script.filename] !== false;
           els.deleteBtn.disabled = false;
+          els.historyBtn.hidden = false;
         }
       }
       dirty = false; updateDirty();
@@ -150,9 +173,52 @@ function onMessage(msg) {
       renderList();
       break;
 
+    case 'history_list':
+      if (historyFor === msg.filename) {
+        historyEntries = msg.entries || [];
+        renderHistoryList();
+      }
+      break;
+
+    case 'history_entry':
+      if (historyFor === msg.filename) {
+        historyCode.set(msg.id, msg.code);
+        if (historySelected === msg.id) showHistoryPreview(msg.id);
+      }
+      break;
+
+    case 'history_cleared':
+      if (historyFor === msg.filename) {
+        historyEntries = [];
+        historyCode.clear();
+        historySelected = null;
+        renderHistoryList();
+      }
+      flashSave('history cleared', '#58a6ff');
+      break;
+
+    case 'all_history_cleared':
+      historyEntries = [];
+      historyCode.clear();
+      historySelected = null;
+      if (els.historyDialog.open) renderHistoryList();
+      flashSave('all history cleared', '#58a6ff');
+      break;
+
     case 'error':
       flashSave('error: ' + msg.message, '#f85149');
       break;
+  }
+}
+
+/** Open a script the popup requested (once the list has loaded). */
+function tryOpenPending() {
+  if (!pendingOpen) return;
+  const fn = pendingOpen;
+  if (scripts.has(fn)) {
+    pendingOpen = null;
+    chrome.storage.local.remove('ms_open_script').catch(() => {});
+    openScript(fn);
   }
 }
 
@@ -341,6 +407,7 @@ function loadIntoEditor(s, keepCursor) {
   els.enabled.checked = enabledMap[s.filename] !== false;
   els.enabledToggle.hidden = false;
   els.closeBtn.hidden = false;
+  els.historyBtn.hidden = false;
 
   refreshHeader(s);
   dirty = false; updateDirty();
@@ -381,6 +448,7 @@ function clearEditor() {
   els.enabled.disabled = true;
   els.enabledToggle.hidden = true;
   els.closeBtn.hidden = true;
+  els.historyBtn.hidden = true;
   dirty = false; updateDirty();
   renderList();
 }
@@ -434,6 +502,7 @@ async function newScript() {
   els.enabled.disabled = true;
   els.enabledToggle.hidden = true; // no enabled state until saved
   els.closeBtn.hidden = false;
+  els.historyBtn.hidden = true;    // no history until first save
   els.headName.textContent = 'New script';
   els.headFile.textContent = '(unsaved — Ctrl+S to create)';
   els.headIcon.hidden = true;
@@ -723,13 +792,19 @@ els.deleteBtn.addEventListener('click', del);
 els.closeBtn.addEventListener('click', closeEditor);
 els.filter.addEventListener('input', renderList);
 
-// Esc closes the editor.
+// Esc closes the editor (but defer to any open drawer/dialog first).
 window.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && (current || isNewDraft) && !els.importDialog.open) {
+  if (e.key !== 'Escape') return;
+  if (isSettingsOpen()) { e.preventDefault(); closeSettings(); return; }
+  if (els.historyDialog.open || els.importDialog.open) return; // dialogs handle Esc themselves
+  if (current || isNewDraft) {
     e.preventDefault();
     closeEditor();
   }
 });
+
+// A <dialog> closing via Esc / backdrop fires 'close' — keep our state in sync.
+els.historyDialog.addEventListener('close', () => { historyFor = null; });
 
 els.resyncBtn.addEventListener('click', async () => {
   try { await chrome.runtime.sendMessage({ __ms_control: true, action: 'resync' }); } catch {}
@@ -836,6 +911,11 @@ async function exportBackup() {
   });
   files.push({ name: 'Tampermonkey.global.json', data: JSON.stringify(TM_GLOBAL_DEFAULT) });
 
+  // SayScript-specific settings (ignored by Tampermonkey, restored on our import).
+  let defaultAuthor = '';
+  try { ({ default_author: defaultAuthor = '' } = await chrome.storage.local.get('default_author')); } catch { /* ignore */ }
+  files.push({ name: 'SayScript.settings.json', data: JSON.stringify({ default_author: defaultAuthor }) });
+
   const blob = await SayZip.write(files);
   const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
   const a = document.createElement('a');
@@ -868,6 +948,19 @@ async function importBackup(file) {
   const dec = new TextDecoder();
   const byName = new Map();
   for (const e of entries) byName.set(e.name, e);
+
+  // Restore SayScript settings (default author) if the backup carries them.
+  // Optional — older / Tampermonkey backups won't have this file, and that's fine.
+  const settingsEntry = byName.get('SayScript.settings.json');
+  if (settingsEntry) {
+    try {
+      const parsed = JSON.parse(dec.decode(settingsEntry.data));
+      if (parsed && typeof parsed.default_author === 'string') {
+        await chrome.storage.local.set({ default_author: parsed.default_author });
+        els.defaultAuthor.value = parsed.default_author;
+      }
+    } catch { /* malformed settings — ignore, import continues */ }
+  }
 
   const userJs = entries.filter((e) => e.name.endsWith('.user.js'));
   if (!userJs.length) {
@@ -1042,6 +1135,164 @@ function showImport(title, status, done) {
 }
 
 /* ===========================================================================
+ * Settings drawer
+ * ========================================================================= */
+
+function openSettings() {
+  els.settingsBackdrop.hidden = false;
+  // next frame so the transition runs
+  requestAnimationFrame(() => {
+    els.settingsBackdrop.classList.add('open');
+    els.settingsDrawer.classList.add('open');
+  });
+  els.settingsDrawer.setAttribute('aria-hidden', 'false');
+}
+
+function closeSettings() {
+  els.settingsBackdrop.classList.remove('open');
+  els.settingsDrawer.classList.remove('open');
+  els.settingsDrawer.setAttribute('aria-hidden', 'true');
+  resetClearAllConfirm();
+  setTimeout(() => { els.settingsBackdrop.hidden = true; }, 220);
+}
+
+function isSettingsOpen() { return els.settingsDrawer.classList.contains('open'); }
+
+els.settingsBtn.addEventListener('click', () => isSettingsOpen() ? closeSettings() : openSettings());
+els.settingsClose.addEventListener('click', closeSettings);
+els.settingsBackdrop.addEventListener('click', closeSettings);
+
+/* ---- clear ALL history (double confirm: must type "confirm") ---- */
+
+function resetClearAllConfirm() {
+  els.clearAllConfirm.hidden = true;
+  els.clearAllInput.value = '';
+  els.clearAllDo.disabled = true;
+  els.clearAllBtn.hidden = false;
+}
+
+els.clearAllBtn.addEventListener('click', () => {
+  els.clearAllBtn.hidden = true;
+  els.clearAllConfirm.hidden = false;
+  els.clearAllInput.value = '';
+  els.clearAllDo.disabled = true;
+  els.clearAllInput.focus();
+});
+els.clearAllCancel.addEventListener('click', resetClearAllConfirm);
+els.clearAllInput.addEventListener('input', () => {
+  els.clearAllDo.disabled = els.clearAllInput.value.trim().toLowerCase() !== 'confirm';
+});
+els.clearAllInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !els.clearAllDo.disabled) els.clearAllDo.click();
+});
+els.clearAllDo.addEventListener('click', () => {
+  if (els.clearAllInput.value.trim().toLowerCase() !== 'confirm') return;
+  send({ action: 'clear_all_history' });
+  resetClearAllConfirm();
+});
+
+/* ===========================================================================
+ * Version history viewer
+ * ========================================================================= */
+
+function fmtTs(ts) {
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return String(ts);
+  return d.toLocaleString(undefined, {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  });
+}
+
+function fmtSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  return (bytes / 1024).toFixed(1) + ' KB';
+}
+
+function openHistory() {
+  if (!current) return;
+  historyFor = current;
+  historyEntries = [];
+  historySelected = null;
+  historyCode.clear();
+  els.historyFile.textContent = current;
+  els.historyPreview.innerHTML = '';
+  els.historyMeta.textContent = '';
+  els.historyRestore.disabled = true;
+  renderHistoryList();
+  if (!els.historyDialog.open) els.historyDialog.showModal();
+  send({ action: 'fetch_history', filename: current });
+}
+
+function closeHistory() {
+  if (els.historyDialog.open) els.historyDialog.close();
+  historyFor = null;
+}
+
+function renderHistoryList() {
+  els.historyList.innerHTML = '';
+  els.historyEmpty.hidden = historyEntries.length > 0;
+  els.historyClear.disabled = historyEntries.length === 0;
+  historyEntries.forEach((e, i) => {
+    const li = document.createElement('li');
+    li.className = 'history-item' + (e.id === historySelected ? ' active' : '');
+    const when = document.createElement('div');
+    when.className = 'hi-when';
+    when.textContent = fmtTs(e.ts);
+    const sub = document.createElement('div');
+    sub.className = 'hi-sub';
+    sub.textContent = (i === 0 ? 'latest · ' : '') + fmtSize(e.size);
+    li.append(when, sub);
+    li.addEventListener('click', () => selectHistory(e.id));
+    els.historyList.appendChild(li);
+  });
+  // Auto-select newest version on first load.
+  if (!historySelected && historyEntries.length) selectHistory(historyEntries[0].id);
+}
+
+function selectHistory(id) {
+  historySelected = id;
+  renderHistoryList();
+  const entry = historyEntries.find((e) => e.id === id);
+  els.historyMeta.textContent = entry ? fmtTs(entry.ts) + ' · ' + fmtSize(entry.size) : '';
+  els.historyRestore.disabled = false;
+  if (historyCode.has(id)) showHistoryPreview(id);
+  else {
+    els.historyPreview.textContent = 'Loading…';
+    send({ action: 'fetch_history_entry', filename: historyFor, id });
+  }
+}
+
+function showHistoryPreview(id) {
+  els.historyPreview.innerHTML = highlight(historyCode.get(id) || '');
+}
+
+function restoreHistory() {
+  if (!historySelected || !historyCode.has(historySelected)) return;
+  const code = historyCode.get(historySelected);
+  closeHistory();
+  // Load into the editor as an unsaved change — the user reviews, then Ctrl+S.
+  els.code.value = code;
+  els.code.disabled = false;
+  dirty = true; updateDirty();
+  refreshHighlight();
+  updateCursor();
+  flashSave('version restored — Ctrl+S to keep', '#d29922');
+}
+
+function clearCurrentHistory() {
+  if (!historyFor) return;
+  if (!confirm('Clear all saved version history for ' + historyFor + '? This cannot be undone.')) return;
+  send({ action: 'clear_history', filename: historyFor });
+}
+
+els.historyBtn.addEventListener('click', openHistory);
+els.historyClose.addEventListener('click', closeHistory);
+els.historyCloseX.addEventListener('click', closeHistory);
+els.historyRestore.addEventListener('click', restoreHistory);
+els.historyClear.addEventListener('click', clearCurrentHistory);
+
+/* ===========================================================================
  * Boot
  * ========================================================================= */
 
@@ -1055,13 +1306,23 @@ async function syncEnabledFromBackground() {
 (async function init() {
   els.serverInfo.textContent = WS_URL;
 
-  const { default_author: savedAuthor = '' } = await chrome.storage.local.get('default_author');
-  els.defaultAuthor.value = savedAuthor;
+  const stored = await chrome.storage.local.get(['default_author', 'ms_open_script']);
+  els.defaultAuthor.value = stored.default_author || '';
   els.defaultAuthor.addEventListener('change', () => {
     chrome.storage.local.set({ default_author: els.defaultAuthor.value.trim() });
+  });
+
+  // The popup can ask us to jump straight into editing a specific script.
+  if (stored.ms_open_script) pendingOpen = stored.ms_open_script;
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.ms_open_script && changes.ms_open_script.newValue) {
+      pendingOpen = changes.ms_open_script.newValue;
+      tryOpenPending();
+    }
   });
 
   await Promise.all([syncEnabledFromBackground(), loadIconCache()]);
   clearEditor();
   connect();
+  tryOpenPending();
 })();
