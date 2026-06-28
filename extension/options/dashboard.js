@@ -543,7 +543,15 @@ function save() {
   if (els.code.disabled) return;
 
   if (isNewDraft) {
-    const code = els.code.value;
+    // A NEW script adopts the default author from settings — even when pasted
+    // in with someone else's @author (which is then replaced).
+    let code = applyDefaultAuthor(els.code.value, els.defaultAuthor.value);
+    if (code !== els.code.value) {
+      const pos = els.code.selectionStart;
+      els.code.value = code;
+      els.code.selectionStart = els.code.selectionEnd = Math.min(pos, code.length);
+      refreshHighlight();
+    }
     const meta = parseMetaClient(code);
     const base = sanitizeBase(meta.name || 'New script') || 'New script';
     const filename = uniqueFilename(base + '.user.js');
@@ -582,6 +590,33 @@ async function closeEditor() {
 }
 
 /* ---- filename helpers ---- */
+
+/** Force the default author from settings into a script's ==UserScript== block:
+ *  replace an existing @author value, or insert an @author line if missing.
+ *  No-op when no default author is set or there's no metadata block. */
+function applyDefaultAuthor(code, author) {
+  author = (author || '').trim();
+  if (!author) return code;
+  const block = /==UserScript==[\s\S]*?==\/UserScript==/.exec(code);
+  if (!block) return code;
+
+  const start = block.index;
+  const end = start + block[0].length;
+  let meta = block[0];
+
+  const authorLine = /^([ \t]*\/\/[ \t]*@author[ \t]+).*$/m;
+  if (authorLine.test(meta)) {
+    meta = meta.replace(authorLine, (m, prefix) => prefix + author);
+  } else {
+    const insert = '// @author       ' + author;
+    // Place it right after @namespace / @version / @name (whichever comes
+    // first), falling back to just after the opening marker.
+    const anchor = /^[ \t]*\/\/[ \t]*@(?:namespace|version|name)\b.*$/m;
+    if (anchor.test(meta)) meta = meta.replace(anchor, (m) => m + '\n' + insert);
+    else meta = meta.replace('==UserScript==', '==UserScript==\n' + insert);
+  }
+  return code.slice(0, start) + meta + code.slice(end);
+}
 
 /** Minimal client-side parse of the ==UserScript== block (name + matches…). */
 function parseMetaClient(code) {
