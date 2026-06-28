@@ -655,6 +655,9 @@ function refreshHighlight() {
   let g = '';
   for (let k = 1; k <= lines; k++) g += k + '\n';
   els.gutter.textContent = g;
+  // grow textarea to full content height so clicks register past the initial viewport
+  els.code.style.height = '1px';
+  els.code.style.height = els.code.scrollHeight + 'px';
   syncScroll();
 }
 
