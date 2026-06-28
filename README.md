@@ -172,15 +172,31 @@ sayscript/
 ├── start.sh / start.bat     ← one-command setup + launch (Linux·macOS / Windows)
 ├── scripts/                 ← your *.user.js files (kept out of git; example included)
 ├── server/                  ← local WebSocket + file-watch backend (PHP / Ratchet)
-│   ├── server.php
+│   ├── server.php           ← thin bootstrap (CLI parse · wire · run loop)
+│   ├── src/
+│   │   ├── MetadataParser.php   ← parses the ==UserScript== block
+│   │   ├── ScriptRepository.php ← *.user.js file IO + path-traversal guard
+│   │   ├── HistoryStore.php     ← per-script version history + pruning
+│   │   └── ScriptSync.php       ← the Ratchet WebSocket component
 │   └── composer.json
 └── extension/               ← the Chromium MV3 extension (load this unpacked)
     ├── manifest.json
-    ├── background.js        ← WS client · userScripts injection · GM bridge
-    ├── gm-polyfill.js       ← GM_* / GM.* compatibility layer
-    ├── options.*            ← dashboard + editor
+    ├── gm-polyfill.js       ← GM_* / GM.* layer (injected as text — stays one file)
+    ├── background/          ← service worker (ES modules)
+    │   ├── index.js             ← entry: message routers · control API · boot
+    │   ├── store.js             ← state + chrome.storage persistence + GM values
+    │   ├── matching.js          ← URL → applicable scripts
+    │   ├── registration.js      ← chrome.userScripts (un)registration
+    │   ├── badge.js             ← per-tab badge counts
+    │   ├── gm-bridge.js         ← GM_* messages + CORS-free fetch
+    │   └── ws-client.js         ← resilient WebSocket to the server
+    ├── options.html , options.css
+    ├── options/             ← dashboard scripts (classic, shared scope)
+    │   ├── dashboard.js         ← editor · list · settings · history · import/export
+    │   ├── highlight.js         ← self-contained JS syntax highlighter
+    │   ├── icons.js             ← @icon cache (data: URLs in chrome.storage)
+    │   └── zip.js               ← dependency-free ZIP reader/writer
     ├── popup.*              ← toolbar popup
-    ├── zip.js               ← dependency-free ZIP reader/writer (import/export)
     └── assets/ , icons/     ← logo & icon
 ```
 
