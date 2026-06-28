@@ -33,7 +33,8 @@ with their own tools:
 - ⚡ **Live two-way sync** over a local WebSocket — UI ⇄ disk, no save buttons to babysit.
 - 🧩 **Tampermonkey-compatible** `GM_*` / `GM.*` API, including CORS-free `GM_xmlhttpRequest`.
 - 📦 **Import/Export** in Tampermonkey's exact `.zip` backup format.
-- 🎨 Built-in dashboard with a syntax-highlighting editor, per-tab toolbar popup, and enable/disable toggles.
+- 🕑 **Per-script version history** — every save is snapshotted to disk; browse, preview and restore past versions, or clear history (per script or globally).
+- 🎨 Built-in dashboard with a syntax-highlighting editor, a settings drawer, per-tab toolbar popup, and enable/disable toggles.
 - 🔒 100% local. Nothing leaves your machine. No CDN, no telemetry, no account.
 
 > **Heads-up:** this is a personal developer tool, not a Web Store extension. It
@@ -132,11 +133,20 @@ pages on the next page load.
   **✕ Close** leaves the editor. The **Enabled** toggle mirrors the list dot.
 - **Live reload** — external file changes reload the open script (your unsaved
   edits are never clobbered — you get a warning instead).
+- **⟲ History** (editor header) — every save is snapshotted under
+  `scripts/.history/<file>/`. Browse versions, preview their code, **Restore**
+  one into the editor (review, then Ctrl+S), or **Clear history** for that script.
+- **⚙️ Settings** (top-left, next to the connection indicator) — a slide-out
+  drawer holding the **Default author**, **Import / Export**, and a guarded
+  **Clear all history** (type `confirm` to wipe every script's history).
 - **Toolbar popup** — lists scripts running on the current tab with on/off
-  toggles, plus an **Open Dashboard** button.
-- **Import / Export** (sidebar footer) — Tampermonkey-compatible `.zip` backups:
+  toggles. **Click a script name** to jump straight into editing it in the
+  dashboard, or use **Open Dashboard**.
+- **Import / Export** (Settings drawer) — Tampermonkey-compatible `.zip` backups:
   per script a `<Name>.user.js` + `.options.json` + `.storage.json`, plus a
-  `Tampermonkey.global.json`. Import restores GM storage values and enabled state.
+  `Tampermonkey.global.json` and a `SayScript.settings.json` (your default
+  author). Import restores GM storage values, enabled state, and — if present —
+  the default author (older backups without it import fine).
 
 ---
 
