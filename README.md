@@ -129,16 +129,18 @@ pages on the next page load.
   Filter with the search box.
 - **+ New** — opens the editor with a template immediately (no name prompt); the
   filename is derived from `@name` on first save and de-duplicated automatically.
-- **Editor** — syntax-highlighted JS. **Ctrl/Cmd + S** writes to disk. **Esc** or
-  **✕ Close** leaves the editor. The **Enabled** toggle mirrors the list dot.
+- **Editor** — syntax-highlighted JS. **Ctrl/Cmd + S** writes to disk (the Save
+  button briefly flips to **✓ Saved**). **Esc** or **✕ Close** leaves the editor.
+  The **Enabled / Disabled** button (in the header action row) mirrors the list dot.
 - **Live reload** — external file changes reload the open script (your unsaved
   edits are never clobbered — you get a warning instead).
 - **⟲ History** (editor header) — every save is snapshotted under
   `scripts/.history/<file>/`. Browse versions, preview their code, **Restore**
   one into the editor (review, then Ctrl+S), or **Clear history** for that script.
 - **⚙️ Settings** (top-left, next to the connection indicator) — a slide-out
-  drawer holding the **Default author**, **Import / Export**, and a guarded
-  **Clear all history** (type `confirm` to wipe every script's history).
+  drawer holding the **Default author**, a **History limit** (max versions kept
+  per script, default 20), **Import / Export**, and a guarded **Clear all
+  history** (type `confirm` to wipe every script's history).
 - **Toolbar popup** — lists scripts running on the current tab with on/off
   toggles. **Click a script name** to jump straight into editing it in the
   dashboard, or use **Open Dashboard**.
