@@ -3,7 +3,6 @@
 
 const listEl = document.getElementById('list');
 const emptyEl = document.getElementById('empty');
-const hostEl = document.getElementById('host');
 const connEl = document.getElementById('conn');
 
 document.getElementById('dash-btn').addEventListener('click', () => {
@@ -80,8 +79,6 @@ async function init() {
   } catch { /* ignore */ }
 
   const url = tab && tab.url || '';
-  try { hostEl.textContent = url ? new URL(url).host || url : 'No active tab'; }
-  catch { hostEl.textContent = url || 'No active tab'; }
 
   let data;
   try {
