@@ -142,6 +142,18 @@
     </div>
   </aside>
 
+  <!-- Generic confirm modal (replaces window.confirm) ----------------- -->
+  <dialog id="confirm-dialog" class="confirm-dialog">
+    <div class="dialog-form">
+      <h3 id="confirm-title">Are you sure?</h3>
+      <p id="confirm-body" class="hint"></p>
+      <menu>
+        <button id="confirm-cancel" class="btn btn--ghost">Cancel</button>
+        <button id="confirm-ok" class="btn btn--primary">Confirm</button>
+      </menu>
+    </div>
+  </dialog>
+
   <!-- Version history viewer ------------------------------------------- -->
   <dialog id="history-dialog" class="history-dialog">
     <div class="history-head">

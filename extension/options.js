@@ -36,6 +36,9 @@ const els = {
   historyEmpty: $('history-empty'), historyMeta: $('history-meta'),
   historyRestore: $('history-restore'), historyClear: $('history-clear'),
   historyClose: $('history-close'), historyCloseX: $('history-close-x'),
+  // confirm modal
+  confirmDialog: $('confirm-dialog'), confirmTitle: $('confirm-title'),
+  confirmBody: $('confirm-body'), confirmOk: $('confirm-ok'), confirmCancel: $('confirm-cancel'),
   gutter: $('gutter'), scroll: $('code-scroll'),
   highlight: $('highlight-code'), code: $('code'),
   pos: $('pos'), serverInfo: $('server-info'),
@@ -59,6 +62,70 @@ let historyCap = 20;            // user setting, mirrored to the server
 let draftEnabled = true;        // enabled state chosen for an unsaved new script
 
 const SAVE_BTN_HTML = '<span>Save</span><span class="kbd-hint"><kbd>Ctrl</kbd>+<kbd>S</kbd></span>';
+// Captured at load so an "armed" button can restore its original icon+label.
+const DELETE_BTN_HTML = els.deleteBtn.innerHTML;
+const HISTORY_CLEAR_HTML = els.historyClear.innerHTML;
+
+/* ===========================================================================
+ * Confirm UI (replaces window.confirm / alert — MV3-friendly, no native popups)
+ * ========================================================================= */
+
+/** Promise-based confirm modal. Resolves true on confirm, false otherwise. */
+let confirmResolve = null;
+function confirmDialog({ title = 'Are you sure?', body = '', confirmLabel = 'Confirm', danger = false } = {}) {
+  els.confirmTitle.textContent = title;
+  els.confirmBody.textContent = body;
+  els.confirmOk.textContent = confirmLabel;
+  els.confirmOk.classList.toggle('btn--danger', danger);
+  els.confirmOk.classList.toggle('btn--primary', !danger);
+  return new Promise((resolve) => {
+    confirmResolve = resolve;
+    els.confirmDialog.showModal();
+  });
+}
+function settleConfirm(val) {
+  const r = confirmResolve;
+  confirmResolve = null;
+  if (els.confirmDialog.open) els.confirmDialog.close();
+  if (r) r(val);
+}
+els.confirmOk.addEventListener('click', () => settleConfirm(true));
+els.confirmCancel.addEventListener('click', () => settleConfirm(false));
+// Esc / backdrop close → treat as cancel.
+els.confirmDialog.addEventListener('close', () => settleConfirm(false));
+
+/** Shared "you have unsaved edits" guard. Resolves true to proceed. */
+function confirmDiscard(what) {
+  return confirmDialog({
+    title: 'Discard unsaved changes?',
+    body: 'You have unsaved edits to ' + what + '. Discard them?',
+    confirmLabel: 'Discard', danger: true,
+  });
+}
+
+/** Two-step inline confirm on a button itself: first click arms it ("Confirm?"
+ *  for 4s), a second click within that window runs `onConfirm`. */
+function armButton(btn, restoreHTML, onConfirm, label = 'Confirm?') {
+  if (btn.dataset.armed === '1') {
+    disarmButton(btn, restoreHTML);
+    onConfirm();
+    return;
+  }
+  btn.dataset.armed = '1';
+  btn.classList.add('is-arming');
+  btn.innerHTML = '<span>' + label + '</span>';
+  clearTimeout(btn._armTimer);
+  btn._armTimer = setTimeout(() => disarmButton(btn, restoreHTML), 4000);
+}
+function disarmButton(btn, restoreHTML) {
+  if (!btn) return;
+  clearTimeout(btn._armTimer);
+  if (btn.dataset.armed === '1') {
+    btn.classList.remove('is-arming');
+    btn.innerHTML = restoreHTML;
+  }
+  btn.dataset.armed = '0';
+}
 
 /* history viewer state */
 let historyFor = null;          // filename the dialog is currently showing
@@ -390,9 +457,9 @@ function listItem(s) {
  * Editor
  * ========================================================================= */
 
-function openScript(filename, keepCursor) {
+async function openScript(filename, keepCursor) {
   if (dirty && (current !== filename || isNewDraft)) {
-    if (!confirm('Discard unsaved changes to ' + (current || 'the new script') + '?')) return;
+    if (!(await confirmDiscard(current || 'the new script'))) return;
   }
   const s = scripts.get(filename);
   if (!s) return;
@@ -415,6 +482,7 @@ function loadIntoEditor(s, keepCursor) {
   els.closeBtn.hidden = false;
   els.historyBtn.hidden = false;
   restoreSaveBtn();
+  disarmButton(els.deleteBtn, DELETE_BTN_HTML);
 
   refreshHeader(s);
   dirty = false; updateDirty();
@@ -452,6 +520,7 @@ function clearEditor() {
   els.metaBar.innerHTML = '';
   els.saveBtn.disabled = true;
   restoreSaveBtn();
+  disarmButton(els.deleteBtn, DELETE_BTN_HTML);
   els.deleteBtn.disabled = true;
   els.enabledBtn.hidden = true;
   els.closeBtn.hidden = true;
@@ -525,9 +594,8 @@ function restoreSaveBtn() {
 /** Start a brand-new script in the editor — NO modal, NO name prompt. The
  *  filename is derived from @name (and made unique) on first save. */
 async function newScript() {
-  if ((dirty || isNewDraft) && (current || isNewDraft)) {
-    const what = current || 'the new script';
-    if (dirty && !confirm('Discard unsaved changes to ' + what + '?')) return;
+  if (dirty && (current || isNewDraft)) {
+    if (!(await confirmDiscard(current || 'the new script'))) return;
   }
   const { default_author: author = '' } = await chrome.storage.local.get('default_author');
   const tpl = buildNewTemplate(author);
@@ -589,14 +657,16 @@ function save() {
 
 function del() {
   if (!current) return;
-  if (!confirm('Delete ' + current + ' from disk? This cannot be undone.')) return;
-  send({ action: 'delete_script', filename: current });
+  // First click arms ("Confirm?"), a second click within 4s deletes.
+  armButton(els.deleteBtn, DELETE_BTN_HTML, () => {
+    if (current) send({ action: 'delete_script', filename: current });
+  });
 }
 
 /** Leave edit mode and return to the empty home view. */
-function closeEditor() {
+async function closeEditor() {
   if (!current && !isNewDraft) return;
-  if (dirty && !confirm('Discard unsaved changes to ' + (current || 'the new script') + '?')) return;
+  if (dirty && !(await confirmDiscard(current || 'the new script'))) return;
   clearEditor();
 }
 
@@ -841,6 +911,7 @@ els.filter.addEventListener('input', renderList);
 // Esc closes the editor (but defer to any open drawer/dialog first).
 window.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
+  if (els.confirmDialog.open) return; // the confirm modal handles its own Esc
   if (isSettingsOpen()) { e.preventDefault(); closeSettings(); return; }
   if (els.historyDialog.open || els.importDialog.open) return; // dialogs handle Esc themselves
   if (current || isNewDraft) {
@@ -850,7 +921,10 @@ window.addEventListener('keydown', (e) => {
 });
 
 // A <dialog> closing via Esc / backdrop fires 'close' — keep our state in sync.
-els.historyDialog.addEventListener('close', () => { historyFor = null; });
+els.historyDialog.addEventListener('close', () => {
+  historyFor = null;
+  disarmButton(els.historyClear, HISTORY_CLEAR_HTML);
+});
 
 els.resyncBtn.addEventListener('click', async () => {
   try { await chrome.runtime.sendMessage({ __ms_control: true, action: 'resync' }); } catch {}
@@ -1296,6 +1370,7 @@ function openHistory() {
   els.historyPreview.innerHTML = '';
   els.historyMeta.textContent = '';
   els.historyRestore.disabled = true;
+  disarmButton(els.historyClear, HISTORY_CLEAR_HTML);
   renderHistoryList();
   if (!els.historyDialog.open) els.historyDialog.showModal();
   send({ action: 'fetch_history', filename: current });
@@ -1359,8 +1434,9 @@ function restoreHistory() {
 
 function clearCurrentHistory() {
   if (!historyFor) return;
-  if (!confirm('Clear all saved version history for ' + historyFor + '? This cannot be undone.')) return;
-  send({ action: 'clear_history', filename: historyFor });
+  armButton(els.historyClear, HISTORY_CLEAR_HTML, () => {
+    if (historyFor) send({ action: 'clear_history', filename: historyFor });
+  });
 }
 
 els.historyBtn.addEventListener('click', openHistory);

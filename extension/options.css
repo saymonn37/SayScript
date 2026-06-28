@@ -215,6 +215,16 @@ html, body {
 .btn--primary.is-saved { background: rgba(34,197,94,.2); border-color: var(--green); color: #b9f6ca; }
 .btn--primary.is-saved:hover:not(:disabled) { background: rgba(34,197,94,.28); }
 
+/* "armed" confirm state: a click turns the button into "Confirm?" for a few
+   seconds; a second click commits. Replaces window.confirm() for destructive
+   actions (Delete, Clear history). */
+#delete-btn.is-arming, #history-clear.is-arming {
+  background: rgba(239,68,68,.34); border-color: var(--red); color: #ffe2e2;
+  font-weight: 600;
+}
+#delete-btn.is-arming:hover:not(:disabled),
+#history-clear.is-arming:hover:not(:disabled) { background: rgba(239,68,68,.46); }
+
 /* buttons */
 .btn {
   font-family: var(--sans); font-size: 12px; cursor: pointer;
