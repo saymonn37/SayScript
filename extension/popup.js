@@ -11,6 +11,15 @@ document.getElementById('dash-btn').addEventListener('click', () => {
   window.close();
 });
 
+/** Open the dashboard and jump straight into editing `filename`. The options
+ *  page reads `ms_open_script` on load (and via storage.onChanged if already
+ *  open) and opens that script in the editor. */
+async function openInDashboard(filename) {
+  try { await chrome.storage.local.set({ ms_open_script: filename }); } catch { /* ignore */ }
+  chrome.runtime.openOptionsPage();
+  window.close();
+}
+
 /* ----- shared icon cache (same `ms_icons` store the dashboard populates) ----- */
 const iconCache = new Map();
 const iconInflight = new Map();
@@ -108,9 +117,12 @@ function render(scripts) {
 
     const nm = document.createElement('span');
     nm.className = 'nm';
+    nm.title = 'Edit “' + s.name + '” in the dashboard';
     const t = document.createElement('div'); t.className = 't'; t.textContent = s.name;
     const v = document.createElement('div'); v.className = 'v'; v.textContent = s.version ? 'v' + s.version : '';
     nm.append(t, v);
+    // Clicking the name jumps straight into editing this script.
+    nm.addEventListener('click', () => openInDashboard(s.filename));
 
     const tg = document.createElement('span');
     tg.className = 'tg' + (s.enabled ? ' on' : '');
