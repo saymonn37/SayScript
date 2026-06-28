@@ -56,8 +56,9 @@ let reconnectDelay = 1000;
 let saveStateTimer = null;
 let saveBtnTimer = null;
 let historyCap = 20;            // user setting, mirrored to the server
+let draftEnabled = true;        // enabled state chosen for an unsaved new script
 
-const SAVE_BTN_HTML = 'Save <kbd>Ctrl</kbd>+<kbd>S</kbd>';
+const SAVE_BTN_HTML = '<span>Save</span><span class="kbd-hint"><kbd>Ctrl</kbd>+<kbd>S</kbd></span>';
 
 /* history viewer state */
 let historyFor = null;          // filename the dialog is currently showing
@@ -536,7 +537,12 @@ async function newScript() {
   els.code.disabled = false;
   els.saveBtn.disabled = false;
   els.deleteBtn.disabled = true;   // nothing on disk to delete yet
-  els.enabledBtn.hidden = true;    // no enabled state until saved
+  // New scripts start ENABLED, but the toggle is live before the first save:
+  // flip it to disabled here and the script is created disabled.
+  draftEnabled = true;
+  renderEnabledBtn(true);
+  els.enabledBtn.hidden = false;
+  els.enabledBtn.disabled = false;
   els.closeBtn.hidden = false;
   els.historyBtn.hidden = true;    // no history until first save
   restoreSaveBtn();
@@ -570,6 +576,9 @@ function save() {
     isNewDraft = false;
     els.headFile.textContent = filename;
     els.deleteBtn.disabled = false;
+    // Honour the toggle chosen while drafting: if the user turned it off, the
+    // new script is created disabled (set it before injection to avoid a flash).
+    if (!draftEnabled) setEnabled(filename, false);
     return;
   }
 
@@ -869,7 +878,13 @@ async function setEnabled(filename, value) {
 }
 
 els.enabledBtn.addEventListener('click', () => {
-  if (current) setEnabled(current, !(enabledMap[current] !== false));
+  if (isNewDraft) {
+    // No file on disk yet — just remember the choice and reflect it.
+    draftEnabled = !draftEnabled;
+    renderEnabledBtn(draftEnabled);
+  } else if (current) {
+    setEnabled(current, !(enabledMap[current] !== false));
+  }
 });
 
 // New script: straight into the editor, no modal.

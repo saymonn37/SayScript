@@ -168,17 +168,50 @@ html, body {
 
 .dirty { color: var(--yellow); font-size: 12px; }
 
-/* enabled/disabled state, styled as a button alongside History/Save/Delete/Close */
-.btn--toggle { display: inline-flex; align-items: center; gap: 7px; }
+/* --- header action buttons: equal height, FIXED widths, consistent colours --- */
+.head-actions .btn {
+  height: 34px; padding: 0 12px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  white-space: nowrap;
+}
+.head-actions .btn svg { display: block; flex: none; }
+.head-actions .btn .kbd-hint { display: inline; }
+/* inline-flex out-ranks the UA `[hidden]{display:none}`, so restore it here for
+   every header button that toggles visibility (Enabled, History, Close). */
+.head-actions .btn[hidden] { display: none; }
+
+/* Fixed widths sized to each button's WIDEST label, so changing text
+   (Enabled⇄Disabled, Save⇄Saving…⇄✓ Saved) never resizes the button. */
+#enabled-btn { min-width: 116px; }
+#history-btn { min-width: 112px; }
+#save-btn    { min-width: 138px; }
+#delete-btn  { min-width: 108px; }
+#close-btn   { min-width: 100px; }
+
+/* enabled / disabled toggle */
 .btn--toggle .tdot {
   width: 8px; height: 8px; border-radius: 50%; background: var(--text-mute);
   transition: background .15s, box-shadow .15s;
 }
-.btn--toggle.is-on { color: #7ee0a0; border-color: rgba(34,197,94,.45); background: rgba(34,197,94,.12); }
+.btn--toggle.is-on { color: #7ee0a0; background: rgba(34,197,94,.12); border-color: rgba(34,197,94,.5); }
 .btn--toggle.is-on:hover:not(:disabled) { background: rgba(34,197,94,.2); }
 .btn--toggle.is-on .tdot { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.btn--toggle:not(.is-on) { color: var(--text-mute); background: transparent; border-color: var(--border); }
+.btn--toggle:not(.is-on):hover:not(:disabled) { background: var(--hover); color: var(--text-dim); }
 
-/* Save button transient success state (replaces the old floating "saved" text) */
+/* history — its own soft indigo tint */
+#history-btn { color: #b3b9ff; background: rgba(124,131,253,.1); border-color: rgba(124,131,253,.4); }
+#history-btn:hover:not(:disabled) { background: rgba(124,131,253,.2); }
+
+/* close — soft neutral tint */
+#close-btn { color: var(--text-dim); background: rgba(176,186,199,.07); border-color: rgba(176,186,199,.28); }
+#close-btn:hover:not(:disabled) { background: rgba(176,186,199,.16); color: var(--text); }
+
+/* delete — danger, translucent border matching the fill */
+#delete-btn.btn--danger { background: rgba(239,68,68,.14); border-color: rgba(239,68,68,.45); color: #f87171; }
+#delete-btn.btn--danger:hover:not(:disabled) { background: rgba(239,68,68,.26); }
+
+/* save success state (width stays fixed via #save-btn min-width) */
 .btn--primary.is-saved { background: rgba(34,197,94,.2); border-color: var(--green); color: #b9f6ca; }
 .btn--primary.is-saved:hover:not(:disabled) { background: rgba(34,197,94,.28); }
 
