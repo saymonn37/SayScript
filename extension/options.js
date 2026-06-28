@@ -20,8 +20,8 @@ const els = {
   defaultAuthor: $('default-author'),
   newBtn: $('new-btn'), resyncBtn: $('resync-btn'),
   headIcon: $('head-icon'), headName: $('head-name'), headFile: $('head-file'),
-  enabled: $('head-enabled'), enabledToggle: $('enabled-toggle'),
-  dirty: $('dirty'), saveState: $('save-state'),
+  enabledBtn: $('enabled-btn'),
+  dirty: $('dirty'), statusMsg: $('status-msg'), historyLimit: $('history-limit'),
   saveBtn: $('save-btn'), deleteBtn: $('delete-btn'), closeBtn: $('close-btn'),
   historyBtn: $('history-btn'),
   metaBar: $('meta-bar'),
@@ -54,6 +54,10 @@ let enabledMap = {};            // filename -> bool, mirrored from background
 let socket = null;
 let reconnectDelay = 1000;
 let saveStateTimer = null;
+let saveBtnTimer = null;
+let historyCap = 20;            // user setting, mirrored to the server
+
+const SAVE_BTN_HTML = 'Save <kbd>Ctrl</kbd>+<kbd>S</kbd>';
 
 /* history viewer state */
 let historyFor = null;          // filename the dialog is currently showing
@@ -94,6 +98,7 @@ function connect() {
     setConn(true);
     reconnectDelay = 1000;
     socket.send(JSON.stringify({ action: 'fetch_all_scripts' }));
+    sendHistoryCap();
   });
 
   socket.addEventListener('message', (ev) => {
@@ -131,9 +136,9 @@ function onMessage(msg) {
       if (current === s.filename) {
         if (!dirty) {
           loadIntoEditor(s);
-          flashSave('reloaded from disk', '#58a6ff');
+          flashStatus('reloaded from disk', '#58a6ff');
         } else {
-          flashSave('disk changed — your edits kept', '#d29922');
+          flashStatus('disk changed — your edits kept', '#d29922');
         }
       }
       break;
@@ -155,15 +160,15 @@ function onMessage(msg) {
           // server's fresh parse so metadata edits show immediately on save.
           refreshHeader(msg.script);
           // A just-created script is now real on disk: enable its controls.
-          els.enabledToggle.hidden = false;
-          els.enabled.disabled = false;
-          els.enabled.checked = enabledMap[msg.script.filename] !== false;
+          els.enabledBtn.hidden = false;
+          els.enabledBtn.disabled = false;
+          renderEnabledBtn(enabledMap[msg.script.filename] !== false);
           els.deleteBtn.disabled = false;
           els.historyBtn.hidden = false;
         }
       }
       dirty = false; updateDirty();
-      flashSave('saved ✓', '#3fb950');
+      markSaved();
       renderList();
       break;
 
@@ -194,7 +199,7 @@ function onMessage(msg) {
         historySelected = null;
         renderHistoryList();
       }
-      flashSave('history cleared', '#58a6ff');
+      flashStatus('history cleared', '#58a6ff');
       break;
 
     case 'all_history_cleared':
@@ -202,11 +207,11 @@ function onMessage(msg) {
       historyCode.clear();
       historySelected = null;
       if (els.historyDialog.open) renderHistoryList();
-      flashSave('all history cleared', '#58a6ff');
+      flashStatus('all history cleared', '#58a6ff');
       break;
 
     case 'error':
-      flashSave('error: ' + msg.message, '#f85149');
+      flashStatus('error: ' + msg.message, '#f85149');
       break;
   }
 }
@@ -403,11 +408,12 @@ function loadIntoEditor(s, keepCursor) {
   els.code.disabled = false;
   els.saveBtn.disabled = false;
   els.deleteBtn.disabled = false;
-  els.enabled.disabled = false;
-  els.enabled.checked = enabledMap[s.filename] !== false;
-  els.enabledToggle.hidden = false;
+  renderEnabledBtn(enabledMap[s.filename] !== false);
+  els.enabledBtn.hidden = false;
+  els.enabledBtn.disabled = false;
   els.closeBtn.hidden = false;
   els.historyBtn.hidden = false;
+  restoreSaveBtn();
 
   refreshHeader(s);
   dirty = false; updateDirty();
@@ -444,13 +450,20 @@ function clearEditor() {
   els.headIcon.hidden = true;
   els.metaBar.innerHTML = '';
   els.saveBtn.disabled = true;
+  restoreSaveBtn();
   els.deleteBtn.disabled = true;
-  els.enabled.disabled = true;
-  els.enabledToggle.hidden = true;
+  els.enabledBtn.hidden = true;
   els.closeBtn.hidden = true;
   els.historyBtn.hidden = true;
   dirty = false; updateDirty();
   renderList();
+}
+
+/** Reflect a script's enabled state on the header toggle button. */
+function renderEnabledBtn(on) {
+  els.enabledBtn.classList.toggle('is-on', on);
+  els.enabledBtn.querySelector('.tlabel').textContent = on ? 'Enabled' : 'Disabled';
+  els.enabledBtn.title = on ? 'Enabled — click to disable' : 'Disabled — click to enable';
 }
 
 function renderMeta(s) {
@@ -475,11 +488,35 @@ function updateDirty() {
   // The header text is owned by refreshHeader()/clearEditor()/newScript().
 }
 
-function flashSave(text, color) {
-  els.saveState.textContent = text;
-  els.saveState.style.color = color;
+/** Transient feedback (reloaded / errors / exported / …) — shown in the bottom
+ *  status bar. Save success/progress is shown ON the Save button instead. */
+function flashStatus(text, color) {
+  els.statusMsg.textContent = text;
+  els.statusMsg.style.color = color;
   clearTimeout(saveStateTimer);
-  saveStateTimer = setTimeout(() => { els.saveState.textContent = ''; }, 4000);
+  saveStateTimer = setTimeout(() => { els.statusMsg.textContent = ''; }, 4000);
+}
+
+/** Save in progress — Save button shows "Saving…". */
+function markSaving() {
+  clearTimeout(saveBtnTimer);
+  els.saveBtn.classList.remove('is-saved');
+  els.saveBtn.textContent = 'Saving…';
+}
+
+/** Save succeeded — Save button flips to "✓ Saved" for 2s, then reverts. */
+function markSaved() {
+  clearTimeout(saveBtnTimer);
+  els.saveBtn.classList.add('is-saved');
+  els.saveBtn.textContent = '✓ Saved';
+  saveBtnTimer = setTimeout(restoreSaveBtn, 2000);
+}
+
+/** Restore the Save button to its default label/appearance. */
+function restoreSaveBtn() {
+  clearTimeout(saveBtnTimer);
+  els.saveBtn.classList.remove('is-saved');
+  els.saveBtn.innerHTML = SAVE_BTN_HTML;
 }
 
 /* ---- new / save / delete ---- */
@@ -499,10 +536,10 @@ async function newScript() {
   els.code.disabled = false;
   els.saveBtn.disabled = false;
   els.deleteBtn.disabled = true;   // nothing on disk to delete yet
-  els.enabled.disabled = true;
-  els.enabledToggle.hidden = true; // no enabled state until saved
+  els.enabledBtn.hidden = true;    // no enabled state until saved
   els.closeBtn.hidden = false;
   els.historyBtn.hidden = true;    // no history until first save
+  restoreSaveBtn();
   els.headName.textContent = 'New script';
   els.headFile.textContent = '(unsaved — Ctrl+S to create)';
   els.headIcon.hidden = true;
@@ -527,7 +564,7 @@ function save() {
     const filename = uniqueFilename(base + '.user.js');
     // create_script with our derived, guaranteed-unique filename
     send({ action: 'create_script', filename, code });
-    flashSave('creating…', '#8b949e');
+    markSaving();
     // adopt the filename now so the incoming update_ack/script_changed binds to it
     current = filename;
     isNewDraft = false;
@@ -538,7 +575,7 @@ function save() {
 
   if (!current) return;
   send({ action: 'update_script', filename: current, code: els.code.value });
-  flashSave('saving…', '#8b949e');
+  markSaving();
 }
 
 function del() {
@@ -808,7 +845,7 @@ els.historyDialog.addEventListener('close', () => { historyFor = null; });
 
 els.resyncBtn.addEventListener('click', async () => {
   try { await chrome.runtime.sendMessage({ __ms_control: true, action: 'resync' }); } catch {}
-  flashSave('re-injected', '#58a6ff');
+  flashStatus('re-injected', '#58a6ff');
 });
 
 /** Enable/disable a script. Shared by the header toggle AND the green dot in
@@ -817,7 +854,7 @@ async function setEnabled(filename, value) {
   // Optimistic, INSTANT UI update — don't wait for the background round-trip
   // (which re-registers the script and can take a moment).
   enabledMap[filename] = value;
-  if (current === filename) els.enabled.checked = value;
+  if (current === filename) renderEnabledBtn(value);
   renderList();
 
   // Persist + (un)inject in the background, then reconcile with the truth.
@@ -825,14 +862,14 @@ async function setEnabled(filename, value) {
     const res = await chrome.runtime.sendMessage({ __ms_control: true, action: 'set_enabled', filename, value });
     if (res && res.ok && res.data && res.data.enabled) {
       enabledMap = res.data.enabled;
-      if (current === filename) els.enabled.checked = enabledMap[filename] !== false;
+      if (current === filename) renderEnabledBtn(enabledMap[filename] !== false);
       renderList();
     }
   } catch { /* background asleep — keep the optimistic state */ }
 }
 
-els.enabled.addEventListener('change', () => {
-  if (current) setEnabled(current, els.enabled.checked);
+els.enabledBtn.addEventListener('click', () => {
+  if (current) setEnabled(current, !(enabledMap[current] !== false));
 });
 
 // New script: straight into the editor, no modal.
@@ -886,7 +923,7 @@ function buildOptionsJson(s, position) {
 async function exportBackup() {
   const list = [...scripts.values()].sort((a, b) =>
     (a.name || a.filename).localeCompare(b.name || b.filename, undefined, { sensitivity: 'base' }));
-  if (!list.length) { flashSave('nothing to export', '#d29922'); return; }
+  if (!list.length) { flashStatus('nothing to export', '#d29922'); return; }
 
   // Pull each script's stored GM values straight from chrome.storage.local.
   const valueKeys = list.map((s) => 'ms_values:' + s.filename);
@@ -914,7 +951,7 @@ async function exportBackup() {
   // SayScript-specific settings (ignored by Tampermonkey, restored on our import).
   let defaultAuthor = '';
   try { ({ default_author: defaultAuthor = '' } = await chrome.storage.local.get('default_author')); } catch { /* ignore */ }
-  files.push({ name: 'SayScript.settings.json', data: JSON.stringify({ default_author: defaultAuthor }) });
+  files.push({ name: 'SayScript.settings.json', data: JSON.stringify({ default_author: defaultAuthor, history_cap: historyCap }) });
 
   const blob = await SayZip.write(files);
   const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
@@ -925,7 +962,7 @@ async function exportBackup() {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 10000);
-  flashSave(`exported ${list.length} script(s)`, '#3fb950');
+  flashStatus(`exported ${list.length} script(s)`, '#3fb950');
 }
 
 /** Import a Tampermonkey (or SayScript) .zip backup. Existing scripts with
@@ -958,6 +995,9 @@ async function importBackup(file) {
       if (parsed && typeof parsed.default_author === 'string') {
         await chrome.storage.local.set({ default_author: parsed.default_author });
         els.defaultAuthor.value = parsed.default_author;
+      }
+      if (parsed && parsed.history_cap != null) {
+        applyHistoryCap(parsed.history_cap); // persist + push the imported limit
       }
     } catch { /* malformed settings — ignore, import continues */ }
   }
@@ -1191,6 +1231,28 @@ els.clearAllDo.addEventListener('click', () => {
   resetClearAllConfirm();
 });
 
+/* ---- history limit (user setting, mirrored to the server) ---- */
+
+function clampCap(n) {
+  n = Math.round(Number(n));
+  if (!Number.isFinite(n)) return 20;
+  return Math.min(1000, Math.max(1, n));
+}
+
+function sendHistoryCap() { send({ action: 'set_history_cap', cap: historyCap }); }
+
+function applyHistoryCap(cap, { persist = true, push = true } = {}) {
+  historyCap = clampCap(cap);
+  els.historyLimit.value = historyCap;
+  if (persist) chrome.storage.local.set({ history_cap: historyCap }).catch(() => {});
+  if (push) sendHistoryCap();
+}
+
+els.historyLimit.addEventListener('change', () => {
+  applyHistoryCap(els.historyLimit.value);
+  flashStatus('history limit set to ' + historyCap, '#58a6ff');
+});
+
 /* ===========================================================================
  * Version history viewer
  * ========================================================================= */
@@ -1277,7 +1339,7 @@ function restoreHistory() {
   dirty = true; updateDirty();
   refreshHighlight();
   updateCursor();
-  flashSave('version restored — Ctrl+S to keep', '#d29922');
+  flashStatus('version restored — Ctrl+S to keep', '#d29922');
 }
 
 function clearCurrentHistory() {
@@ -1306,8 +1368,10 @@ async function syncEnabledFromBackground() {
 (async function init() {
   els.serverInfo.textContent = WS_URL;
 
-  const stored = await chrome.storage.local.get(['default_author', 'ms_open_script']);
+  const stored = await chrome.storage.local.get(['default_author', 'history_cap', 'ms_open_script']);
   els.defaultAuthor.value = stored.default_author || '';
+  // Don't push yet — connect()'s open handler sends the cap once the socket is up.
+  applyHistoryCap(stored.history_cap ?? 20, { persist: false, push: false });
   els.defaultAuthor.addEventListener('change', () => {
     chrome.storage.local.set({ default_author: els.defaultAuthor.value.trim() });
   });

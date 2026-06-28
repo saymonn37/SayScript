@@ -167,24 +167,20 @@ html, body {
 .head-actions { display: flex; align-items: center; gap: 12px; }
 
 .dirty { color: var(--yellow); font-size: 12px; }
-.save-state { color: var(--green); font-size: 12px; min-width: 60px; }
 
-/* toggle */
-.toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12px; color: var(--text-dim); }
-/* `.toggle` (display:flex) out-specifies the UA `[hidden]{display:none}` rule,
-   so the hidden attribute needs a same-class, higher-specificity override. */
-.toggle[hidden] { display: none; }
-.toggle input { display: none; }
-.toggle-track {
-  width: 34px; height: 18px; border-radius: 999px; background: var(--border);
-  position: relative; transition: background .15s;
+/* enabled/disabled state, styled as a button alongside History/Save/Delete/Close */
+.btn--toggle { display: inline-flex; align-items: center; gap: 7px; }
+.btn--toggle .tdot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--text-mute);
+  transition: background .15s, box-shadow .15s;
 }
-.toggle-thumb {
-  position: absolute; top: 2px; left: 2px; width: 14px; height: 14px;
-  background: #fff; border-radius: 50%; transition: transform .15s;
-}
-.toggle input:checked + .toggle-track { background: var(--green); }
-.toggle input:checked + .toggle-track .toggle-thumb { transform: translateX(16px); }
+.btn--toggle.is-on { color: #7ee0a0; border-color: rgba(34,197,94,.45); background: rgba(34,197,94,.12); }
+.btn--toggle.is-on:hover:not(:disabled) { background: rgba(34,197,94,.2); }
+.btn--toggle.is-on .tdot { background: var(--green); box-shadow: 0 0 6px var(--green); }
+
+/* Save button transient success state (replaces the old floating "saved" text) */
+.btn--primary.is-saved { background: rgba(34,197,94,.2); border-color: var(--green); color: #b9f6ca; }
+.btn--primary.is-saved:hover:not(:disabled) { background: rgba(34,197,94,.28); }
 
 /* buttons */
 .btn {
@@ -266,6 +262,9 @@ html, body {
   padding: 5px 16px; font-family: var(--mono); font-size: 11px;
   color: var(--text-mute); background: var(--bg-elev); border-top: 1px solid var(--border);
 }
+/* transient feedback (saved/reloaded/errors) — lives in the status bar now,
+   not in a floating slot inside the editor header */
+.status-msg { flex: 1; text-align: center; color: var(--green); transition: opacity .15s; }
 
 /* dialog */
 dialog {
@@ -338,6 +337,7 @@ dialog::backdrop { background: rgba(0,0,0,.55); }
 }
 .setting-input:focus { outline: none; border-color: var(--accent-2); }
 .setting-input::placeholder { color: var(--text-mute); }
+.setting-input--num { width: 120px; font-family: var(--mono); }
 .setting-actions { display: flex; gap: 8px; }
 .setting--danger .setting-label { color: var(--red); }
 

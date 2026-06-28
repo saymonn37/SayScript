@@ -55,13 +55,10 @@
           </div>
         </div>
         <div class="head-actions">
-          <label id="enabled-toggle" class="toggle" title="Enable / disable injection" hidden>
-            <input id="head-enabled" type="checkbox" checked>
-            <span class="toggle-track"><span class="toggle-thumb"></span></span>
-            <span class="toggle-label">Enabled</span>
-          </label>
           <span id="dirty" class="dirty" hidden>● unsaved</span>
-          <span id="save-state" class="save-state"></span>
+          <button id="enabled-btn" class="btn btn--toggle is-on" title="Enable / disable injection" hidden>
+            <span class="tdot"></span><span class="tlabel">Enabled</span>
+          </button>
           <button id="history-btn" class="btn btn--ghost" title="View version history" hidden>⟲ History</button>
           <button id="save-btn" class="btn btn--primary" disabled>Save <kbd>Ctrl</kbd>+<kbd>S</kbd></button>
           <button id="delete-btn" class="btn btn--danger" disabled>Delete</button>
@@ -84,6 +81,7 @@
 
       <footer id="status" class="status-bar">
         <span id="pos">Ln 1, Col 1</span>
+        <span id="status-msg" class="status-msg"></span>
         <span id="server-info">ws://localhost:8165</span>
       </footer>
     </main>
@@ -101,6 +99,12 @@
         <label class="setting-label" for="default-author">Default author</label>
         <p class="setting-hint">Pre-filled as <code>@author</code> on every new script. Stored until you change it.</p>
         <input id="default-author" class="setting-input" type="text" placeholder="Your name…" autocomplete="off">
+      </section>
+
+      <section class="setting">
+        <label class="setting-label" for="history-limit">History limit</label>
+        <p class="setting-hint">Maximum saved versions kept per script — older ones are pruned. Default <strong>20</strong>.</p>
+        <input id="history-limit" class="setting-input setting-input--num" type="number" min="1" max="1000" step="1" value="20">
       </section>
 
       <section class="setting">

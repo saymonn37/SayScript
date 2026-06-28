@@ -62,12 +62,14 @@ $scriptsDir = realpath($scriptsDir) ?: $scriptsDir;
 
 final class ScriptSync implements MessageComponentInterface
 {
-    /** Max number of versions kept per script in .history (oldest pruned). */
-    private const HISTORY_CAP = 50;
+    /** Default max versions kept per script (oldest pruned). Overridable at
+     *  runtime by the dashboard via the `set_history_cap` action. */
+    private const HISTORY_CAP_DEFAULT = 20;
 
     private \SplObjectStorage $clients;
     private string $dir;
     private string $historyDir;
+    private int $historyCap = self::HISTORY_CAP_DEFAULT;
 
     /** filename => ['mtime' => int, 'size' => int] used for change detection */
     private array $snapshots = [];
@@ -143,6 +145,10 @@ final class ScriptSync implements MessageComponentInterface
 
             case 'clear_all_history':
                 $this->handleClearAllHistory($from);
+                break;
+
+            case 'set_history_cap':
+                $this->handleSetHistoryCap($data);
                 break;
 
             case 'ping':
@@ -291,6 +297,34 @@ final class ScriptSync implements MessageComponentInterface
         $this->log("History cleared: ALL scripts");
     }
 
+    /** The dashboard owns the history limit (a user setting); apply it live and
+     *  immediately prune existing histories down to the new cap. */
+    private function handleSetHistoryCap(array $data): void
+    {
+        $cap = (int)($data['cap'] ?? 0);
+        if ($cap < 1) {
+            return; // ignore nonsense; keep current cap
+        }
+        $cap = min($cap, 1000);
+        if ($cap === $this->historyCap) {
+            return;
+        }
+        $this->historyCap = $cap;
+        $this->log("History cap set to {$cap}");
+        // Re-prune every script's history to honour the new (possibly lower) cap.
+        if (is_dir($this->historyDir)) {
+            foreach (scandir($this->historyDir) ?: [] as $entry) {
+                if ($entry === '.' || $entry === '..') {
+                    continue;
+                }
+                $sub = $this->historyDir . DIRECTORY_SEPARATOR . $entry;
+                if (is_dir($sub)) {
+                    $this->pruneHistory($sub);
+                }
+            }
+        }
+    }
+
     /* ----- history storage ----- */
 
     /** Per-script history folder: .history/<filename>/ */
@@ -347,7 +381,7 @@ final class ScriptSync implements MessageComponentInterface
     private function pruneHistory(string $dir): void
     {
         $files = $this->historyFiles($dir);
-        $excess = count($files) - self::HISTORY_CAP;
+        $excess = count($files) - $this->historyCap;
         for ($i = 0; $i < $excess; $i++) {
             @unlink($dir . DIRECTORY_SEPARATOR . $files[$i]);
         }
