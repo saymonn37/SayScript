@@ -189,7 +189,11 @@
     </div>
   </dialog>
 
-  <script src="zip.js"></script>
-  <script src="options.js"></script>
+  <!-- Classic scripts sharing one global scope (load order matters):
+       pure/self-contained helpers first, then the dashboard core. -->
+  <script src="options/highlight.js"></script>
+  <script src="options/icons.js"></script>
+  <script src="options/zip.js"></script>
+  <script src="options/dashboard.js"></script>
 </body>
 </html>
