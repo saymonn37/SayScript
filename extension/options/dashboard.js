@@ -679,7 +679,6 @@ syncScroll();
 
 function syncScroll() {
   els.highlight.parentElement.style.transform = '';
-  els.gutter.scrollTop = els.scroll.scrollTop;
   els.gutter.style.transform = `translateY(${-els.scroll.scrollTop}px)`;
 }
 
