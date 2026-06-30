@@ -679,7 +679,7 @@ syncScroll();
 
 function syncScroll() {
   els.highlight.parentElement.style.transform = '';
-  els.gutter.style.transform = `translateY(${-els.scroll.scrollTop}px)`;
+  els.gutter.style.transform = `translateY(${-els.code.scrollTop}px)`;
 }
 
 function updateCursor() {
@@ -703,6 +703,7 @@ els.code.addEventListener('input', () => {
 
 els.code.addEventListener('scroll', () => {
   els.highlight.parentElement.scrollTop = els.code.scrollTop;
+  syncScroll();
 });
 els.scroll.addEventListener('scroll', syncScroll);
 
