@@ -265,7 +265,12 @@ html, body {
   padding: 12px 8px 12px 14px; text-align: right; color: var(--text-mute);
   background: var(--bg); border-right: 1px solid var(--border-soft);
   user-select: none; overflow: hidden; white-space: pre; min-width: 48px;
+  position: relative;
 }
+/* Translated independently of .gutter so the translateY only moves the line
+   numbers, not the overflow:hidden clipping box itself (which would just
+   carry the whole gutter off-screen once scrolled). */
+#gutter-lines { position: relative; }
 .code-scroll { position: relative; flex: 1; overflow: auto; min-width: 0; }
 
 .highlight, .code-input {

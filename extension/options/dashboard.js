@@ -39,7 +39,7 @@ const els = {
   // confirm modal
   confirmDialog: $('confirm-dialog'), confirmTitle: $('confirm-title'),
   confirmBody: $('confirm-body'), confirmOk: $('confirm-ok'), confirmCancel: $('confirm-cancel'),
-  gutter: $('gutter'), scroll: $('code-scroll'),
+  gutter: $('gutter'), gutterLines: $('gutter-lines'), scroll: $('code-scroll'),
   highlight: $('highlight-code'), code: $('code'),
   pos: $('pos'), serverInfo: $('server-info'),
   importBtn: $('import-btn'), exportBtn: $('export-btn'), importFile: $('import-file'),
@@ -429,7 +429,7 @@ function clearEditor() {
   els.code.value = '';
   els.code.disabled = true;
   els.highlight.innerHTML = '';
-  els.gutter.textContent = '';
+  els.gutterLines.textContent = '';
   els.headName.textContent = 'No script selected';
   els.headFile.textContent = '';
   els.headIcon.hidden = true;
@@ -673,13 +673,13 @@ function refreshHighlight() {
   const lines = src.split('\n').length;
   let g = '';
   for (let k = 1; k <= lines; k++) g += k + '\n';
-  els.gutter.textContent = g;
+  els.gutterLines.textContent = g;
 syncScroll();
 }
 
 function syncScroll() {
   els.highlight.parentElement.style.transform = '';
-  els.gutter.style.transform = `translateY(${-els.scroll.scrollTop}px)`;
+  els.gutterLines.style.transform = `translateY(${-els.scroll.scrollTop}px)`;
 }
 
 function updateCursor() {
