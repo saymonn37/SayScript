@@ -395,6 +395,11 @@ function loadIntoEditor(s, keepCursor) {
   restoreSaveBtn();
   disarmButton(els.deleteBtn, DELETE_BTN_HTML);
 
+  // Reset scroll position before re-rendering — otherwise syncScroll() reuses the
+  // previous script's stale scrollTop and translates the gutter off-screen.
+  els.scroll.scrollTop = 0;
+  els.code.scrollTop = 0;
+
   refreshHeader(s);
   dirty = false; updateDirty();
   refreshHighlight();
@@ -699,11 +704,8 @@ els.code.addEventListener('input', () => {
 
 els.code.addEventListener('scroll', () => {
   els.highlight.parentElement.scrollTop = els.code.scrollTop;
-  els.gutter.scrollTop = els.code.scrollTop;
 });
-els.scroll.addEventListener('scroll', () => {
-  els.gutter.scrollTop = els.scroll.scrollTop;
-});
+els.scroll.addEventListener('scroll', syncScroll);
 
 els.code.addEventListener('keyup', updateCursor);
 els.code.addEventListener('click', updateCursor);
