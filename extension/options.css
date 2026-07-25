@@ -182,11 +182,12 @@ html, body {
 
 /* Fixed widths sized to each button's WIDEST label, so changing text
    (Enabled⇄Disabled, Save⇄Saving…⇄✓ Saved) never resizes the button. */
-#enabled-btn { min-width: 116px; }
-#history-btn { min-width: 112px; }
-#save-btn    { min-width: 138px; }
-#delete-btn  { min-width: 108px; }
-#close-btn   { min-width: 100px; }
+#enabled-btn     { min-width: 116px; }
+#open-folder-btn { min-width: 150px; }
+#history-btn     { min-width: 112px; }
+#save-btn        { min-width: 138px; }
+#delete-btn      { min-width: 108px; }
+#close-btn       { min-width: 100px; }
 
 /* enabled / disabled toggle */
 .btn--toggle .tdot {
@@ -198,6 +199,10 @@ html, body {
 .btn--toggle.is-on .tdot { background: var(--green); box-shadow: 0 0 6px var(--green); }
 .btn--toggle:not(.is-on) { color: var(--text-mute); background: transparent; border-color: var(--border); }
 .btn--toggle:not(.is-on):hover:not(:disabled) { background: var(--hover); color: var(--text-dim); }
+
+/* open in folder — soft neutral tint, same idiom as Close */
+#open-folder-btn { color: var(--text-dim); background: rgba(176,186,199,.07); border-color: rgba(176,186,199,.28); }
+#open-folder-btn:hover:not(:disabled) { background: rgba(176,186,199,.16); color: var(--text); }
 
 /* history — its own soft indigo tint */
 #history-btn { color: #b3b9ff; background: rgba(124,131,253,.1); border-color: rgba(124,131,253,.4); }
@@ -278,6 +283,22 @@ html, body {
   font-family: var(--mono); font-size: 13px; line-height: 20px;
   padding: 12px 16px; tab-size: 2;
   white-space: pre; word-wrap: normal;
+}
+/* "Wrap Code" setting: soft-wrap visually only (no CRs added, gutter numbers
+   stay 1:1 with real lines — see computeGutterText() in dashboard.js). */
+.editor-wrap.wrap-on .highlight,
+.editor-wrap.wrap-on .code-input {
+  white-space: pre-wrap; overflow-wrap: anywhere; word-wrap: break-word;
+}
+/* Off-screen twin of the code column's content box, used only to measure how
+   many visual rows a single logical line wraps into (font/line-height/tab-size
+   must match .code-input exactly; padding is intentionally 0 — JS sizes its
+   width to the content box, not the padded box). */
+.wrap-measure {
+  position: absolute; visibility: hidden; left: -99999px; top: 0;
+  margin: 0; padding: 0; border: 0;
+  font-family: var(--mono); font-size: 13px; line-height: 20px; tab-size: 2;
+  white-space: pre-wrap; overflow-wrap: anywhere; word-wrap: break-word;
 }
 .highlight {
   position: absolute; inset: 0; pointer-events: none;

@@ -80,6 +80,10 @@ final class ScriptSync implements MessageComponentInterface
                 $this->handleDelete($from, $data);
                 break;
 
+            case 'open_folder':
+                $this->handleOpenFolder($from, $data);
+                break;
+
             case 'fetch_history':
                 $this->handleFetchHistory($from, $data);
                 break;
@@ -183,6 +187,24 @@ final class ScriptSync implements MessageComponentInterface
         $this->send($from, ['type' => 'delete_ack', 'filename' => $filename]);
         $this->broadcast(['type' => 'script_deleted', 'filename' => $filename], $from);
         $this->log("Deleted: {$filename}");
+    }
+
+    /** Open the script's containing folder in Nautilus, with the file pre-selected.
+     *  Runs on the same local machine as the user's desktop (per the project's
+     *  design), so shelling out to the file manager is safe here. */
+    private function handleOpenFolder(ConnectionInterface $from, array $data): void
+    {
+        $filename = $this->repo->safeFilename($data['filename'] ?? '');
+        if ($filename === null || !$this->repo->exists($filename)) {
+            $this->send($from, ['type' => 'error', 'message' => 'Invalid filename']);
+            return;
+        }
+        $path = $this->repo->path($filename);
+        // Trailing "&" backgrounds the process so exec() returns immediately
+        // instead of blocking the event loop until Nautilus exits.
+        exec('nautilus --select ' . escapeshellarg($path) . ' > /dev/null 2>&1 &');
+        $this->send($from, ['type' => 'folder_opened', 'filename' => $filename]);
+        $this->log("Opened in Nautilus: {$filename}");
     }
 
     /* ----- history action handlers ----- */

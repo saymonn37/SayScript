@@ -20,7 +20,7 @@ const els = {
   defaultAuthor: $('default-author'),
   newBtn: $('new-btn'), resyncBtn: $('resync-btn'),
   headIcon: $('head-icon'), headName: $('head-name'), headFile: $('head-file'),
-  enabledBtn: $('enabled-btn'),
+  enabledBtn: $('enabled-btn'), openFolderBtn: $('open-folder-btn'),
   dirty: $('dirty'), statusMsg: $('status-msg'), historyLimit: $('history-limit'),
   saveBtn: $('save-btn'), deleteBtn: $('delete-btn'), closeBtn: $('close-btn'),
   historyBtn: $('history-btn'),
@@ -30,6 +30,7 @@ const els = {
   settingsBackdrop: $('settings-backdrop'), settingsClose: $('settings-close'),
   clearAllBtn: $('clear-all-history-btn'), clearAllConfirm: $('clear-all-confirm'),
   clearAllInput: $('clear-all-input'), clearAllCancel: $('clear-all-cancel'), clearAllDo: $('clear-all-do'),
+  wrapCodeBtn: $('wrap-code-btn'),
   // history dialog
   historyDialog: $('history-dialog'), historyFile: $('history-file'),
   historyList: $('history-list'), historyPreview: $('history-preview-code'),
@@ -41,6 +42,7 @@ const els = {
   confirmBody: $('confirm-body'), confirmOk: $('confirm-ok'), confirmCancel: $('confirm-cancel'),
   gutter: $('gutter'), gutterLines: $('gutter-lines'), scroll: $('code-scroll'),
   highlight: $('highlight-code'), code: $('code'),
+  editorWrap: $('editor-wrap'), wrapMeasure: $('wrap-measure'),
   pos: $('pos'), serverInfo: $('server-info'),
   importBtn: $('import-btn'), exportBtn: $('export-btn'), importFile: $('import-file'),
   importDialog: $('import-dialog'), importTitle: $('import-title'),
@@ -59,6 +61,7 @@ let reconnectDelay = 1000;
 let saveStateTimer = null;
 let saveBtnTimer = null;
 let historyCap = 20;            // user setting, mirrored to the server
+let wrapCode = false;           // user setting: soft-wrap the code editor
 let draftEnabled = true;        // enabled state chosen for an unsaved new script
 
 const SAVE_BTN_HTML = '<span>Save</span><span class="kbd-hint"><kbd>Ctrl</kbd>+<kbd>S</kbd></span>';
@@ -233,6 +236,7 @@ function onMessage(msg) {
           renderEnabledBtn(enabledMap[msg.script.filename] !== false);
           els.deleteBtn.disabled = false;
           els.historyBtn.hidden = false;
+          els.openFolderBtn.hidden = false;
         }
       }
       dirty = false; updateDirty();
@@ -268,6 +272,10 @@ function onMessage(msg) {
         renderHistoryList();
       }
       flashStatus('history cleared', '#58a6ff');
+      break;
+
+    case 'folder_opened':
+      flashStatus('opened in file manager', '#58a6ff');
       break;
 
     case 'all_history_cleared':
@@ -392,6 +400,7 @@ function loadIntoEditor(s, keepCursor) {
   els.enabledBtn.disabled = false;
   els.closeBtn.hidden = false;
   els.historyBtn.hidden = false;
+  els.openFolderBtn.hidden = false;
   restoreSaveBtn();
   disarmButton(els.deleteBtn, DELETE_BTN_HTML);
 
@@ -441,6 +450,7 @@ function clearEditor() {
   els.enabledBtn.hidden = true;
   els.closeBtn.hidden = true;
   els.historyBtn.hidden = true;
+  els.openFolderBtn.hidden = true;
   dirty = false; updateDirty();
   renderList();
 }
@@ -529,6 +539,7 @@ async function newScript() {
   els.enabledBtn.disabled = false;
   els.closeBtn.hidden = false;
   els.historyBtn.hidden = true;    // no history until first save
+  els.openFolderBtn.hidden = true; // no file on disk yet
   restoreSaveBtn();
   els.headName.textContent = 'New script';
   els.headFile.textContent = '(unsaved — Ctrl+S to create)';
@@ -669,12 +680,36 @@ function uniqueFilename(filename) {
 function refreshHighlight() {
   const src = els.code.value;
   els.highlight.innerHTML = highlight(src) + '\n';
-  // gutter line numbers
-  const lines = src.split('\n').length;
+  els.gutterLines.textContent = computeGutterText(src);
+  syncScroll();
+}
+
+const GUTTER_LINE_HEIGHT = 20; // px — must match .highlight/.code-input line-height
+
+/** Build the gutter's line-number text. With wrap off this is a plain 1..N
+ *  count (one row per '\n'). With "Wrap Code" on, a single logical line can
+ *  render as several visual rows — this measures each line's wrapped height
+ *  off-screen (via #wrap-measure, styled identically to the code column) and
+ *  emits blank continuation rows so the gutter stays aligned, without ever
+ *  treating a wrapped row as a new line. */
+function computeGutterText(src) {
+  const lines = src.split('\n');
+  if (!wrapCode) {
+    let g = '';
+    for (let k = 1; k <= lines.length; k++) g += k + '\n';
+    return g;
+  }
+
+  const width = Math.max(0, els.code.clientWidth - 32); // minus .code-input's 16px×2 padding
+  els.wrapMeasure.style.width = width + 'px';
+
   let g = '';
-  for (let k = 1; k <= lines; k++) g += k + '\n';
-  els.gutterLines.textContent = g;
-syncScroll();
+  for (let i = 0; i < lines.length; i++) {
+    els.wrapMeasure.textContent = lines[i].length ? lines[i] : ' ';
+    const rows = Math.max(1, Math.round(els.wrapMeasure.scrollHeight / GUTTER_LINE_HEIGHT));
+    g += (i + 1) + '\n' + '\n'.repeat(rows - 1);
+  }
+  return g;
 }
 
 function syncScroll() {
@@ -736,6 +771,9 @@ window.addEventListener('keydown', (e) => {
 els.saveBtn.addEventListener('click', save);
 els.deleteBtn.addEventListener('click', del);
 els.closeBtn.addEventListener('click', closeEditor);
+els.openFolderBtn.addEventListener('click', () => {
+  if (current) send({ action: 'open_folder', filename: current });
+});
 els.filter.addEventListener('input', renderList);
 
 // Esc closes the editor (but defer to any open drawer/dialog first).
@@ -1172,6 +1210,26 @@ els.historyLimit.addEventListener('change', () => {
   flashStatus('history limit set to ' + historyCap, '#58a6ff');
 });
 
+/* ---- wrap code (user setting, editor-only) ---- */
+
+function applyWrapCode(on, { persist = true } = {}) {
+  wrapCode = !!on;
+  els.wrapCodeBtn.classList.toggle('is-on', wrapCode);
+  els.wrapCodeBtn.querySelector('.tlabel').textContent = wrapCode ? 'On' : 'Off';
+  els.editorWrap.classList.toggle('wrap-on', wrapCode);
+  els.code.wrap = wrapCode ? 'soft' : 'off';
+  if (persist) chrome.storage.local.set({ wrap_code: wrapCode }).catch(() => {});
+  refreshHighlight();
+}
+
+els.wrapCodeBtn.addEventListener('click', () => applyWrapCode(!wrapCode));
+
+// Re-measure wrapped rows when the editor column is resized (window resize,
+// sidebar/drawer toggling) — the wrap width, and thus the row count, changes.
+if (typeof ResizeObserver !== 'undefined') {
+  new ResizeObserver(() => { if (wrapCode) refreshHighlight(); }).observe(els.code);
+}
+
 /* ===========================================================================
  * Version history viewer
  * ========================================================================= */
@@ -1289,10 +1347,11 @@ async function syncEnabledFromBackground() {
 (async function init() {
   els.serverInfo.textContent = WS_URL;
 
-  const stored = await chrome.storage.local.get(['default_author', 'history_cap', 'ms_open_script']);
+  const stored = await chrome.storage.local.get(['default_author', 'history_cap', 'wrap_code', 'ms_open_script']);
   els.defaultAuthor.value = stored.default_author || '';
   // Don't push yet — connect()'s open handler sends the cap once the socket is up.
   applyHistoryCap(stored.history_cap ?? 20, { persist: false, push: false });
+  applyWrapCode(stored.wrap_code === true, { persist: false });
   els.defaultAuthor.addEventListener('change', () => {
     chrome.storage.local.set({ default_author: els.defaultAuthor.value.trim() });
   });

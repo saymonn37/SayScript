@@ -59,6 +59,10 @@
           <button id="enabled-btn" class="btn btn--toggle is-on" title="Enable / disable injection" hidden>
             <span class="tdot"></span><span class="tlabel">Enabled</span>
           </button>
+          <button id="open-folder-btn" class="btn btn--ghost" title="Open containing folder in Nautilus" hidden>
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+            <span>Open in Folder</span>
+          </button>
           <button id="history-btn" class="btn btn--ghost" title="View version history" hidden>
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v5h5"></path><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"></path><path d="M12 7v5l3 2"></path></svg>
             <span>History</span>
@@ -87,6 +91,7 @@
                     autocapitalize="off" wrap="off" placeholder="Select a script on the left, or create a new one."></textarea>
         </div>
       </div>
+      <div id="wrap-measure" class="wrap-measure" aria-hidden="true"></div>
 
       <footer id="status" class="status-bar">
         <span id="pos">Ln 1, Col 1</span>
@@ -104,6 +109,14 @@
       <button id="settings-close" class="icon-btn" title="Close settings" aria-label="Close settings">✕</button>
     </header>
     <div class="drawer-body">
+      <section class="setting">
+        <label class="setting-label">Wrap Code</label>
+        <p class="setting-hint">Soft-wrap long lines in the editor so they never need horizontal scrolling. Visual only — the file on disk and the line numbering are unchanged.</p>
+        <button id="wrap-code-btn" class="btn btn--toggle" title="Toggle soft-wrap in the code editor">
+          <span class="tdot"></span><span class="tlabel">Off</span>
+        </button>
+      </section>
+
       <section class="setting">
         <label class="setting-label" for="default-author">Default author</label>
         <p class="setting-hint">Pre-filled as <code>@author</code> on every new script. Stored until you change it.</p>
