@@ -71,6 +71,16 @@ ręcznie („Załaduj rozpakowane”). Kreator pokazuje te same kroki na końcu:
 Chrome może co jakiś czas wyświetlać komunikat „Wyłącz rozszerzenia w trybie programisty”.
 Zamknij go (**Anuluj** / ✕) — rozszerzenie zostaje włączone.
 
+### Zajęty port?
+
+Serwer domyślnie używa portu **8165**. Jeśli ktoś już go zajmuje, kreator **sam znajdzie
+pierwszy wolny port z zakresu 8165–8185**, uruchomi na nim serwer i zapisze go w
+`extension/server-config.json`, skąd rozszerzenie go odczyta — nie musisz nic ustawiać.
+Wymusić konkretny port można tak: `./install.sh --port 8170` (Windows:
+`powershell -File install.ps1 -Port 8170`). Po ponownej instalacji kreator zostaje przy
+wybranym wcześniej porcie. Jeśli rozszerzenie było już wgrane, po zmianie portu kliknij
+ikonę odświeżenia przy SayScript w `chrome://extensions` (skrypty zostają).
+
 ## Jak z tego korzystać
 
 - Skrypty `*.user.js` wrzucasz do folderu **`scripts/`** (albo dodajesz przyciskiem
@@ -85,7 +95,7 @@ Zamknij go (**Anuluj** / ✕) — rozszerzenie zostaje włączone.
 
 | Objaw | Co zrobić |
 |---|---|
-| Panel pokazuje **offline** / czerwony wskaźnik | Serwer nie działa. Windows: uruchom `Install-SayScript.bat` jeszcze raz. Linux: `systemctl --user status sayscript`. Sprawdź też, czy coś innego nie zajmuje portu 8165. |
+| Panel pokazuje **offline** / czerwony wskaźnik | Serwer nie działa. Windows: uruchom `Install-SayScript.bat` jeszcze raz. Linux: `systemctl --user status sayscript`. Uruchom kreator ponownie — sam wybierze wolny port. |
 | Skrypty **nie uruchamiają się** na stronach | Włącz **Zezwalaj na skrypty użytkownika** w Szczegółach rozszerzenia (krok 3.4), potem odśwież stronę. |
 | Nie widzę przełącznika „Tryb programisty” | Jesteś w zarządzanej przeglądarce (praca/szkoła) z zablokowaną opcją — użyj prywatnego profilu. |
 | Opcja „Allow user scripts” nie istnieje | Przeglądarka jest zbyt stara — zaktualizuj do wersji **120+** (`chrome://settings/help`). |

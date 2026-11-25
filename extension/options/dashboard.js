@@ -10,7 +10,18 @@
  *   - Enable/disable toggles are forwarded to the background worker.
  * ======================================================================== */
 
-const WS_URL = 'ws://localhost:8165';
+let WS_URL = 'ws://localhost:8165';
+
+/** Port override written by the installer (extension/server-config.json). */
+async function loadServerConfig() {
+  try {
+    const res = await fetch(chrome.runtime.getURL('server-config.json'), { cache: 'no-store' });
+    if (res.ok) {
+      const port = Number((await res.json()).port);
+      if (Number.isInteger(port) && port > 0 && port < 65536) WS_URL = `ws://localhost:${port}`;
+    }
+  } catch { /* default port */ }
+}
 
 /* ---------------- DOM refs ---------------- */
 const $ = (id) => document.getElementById(id);
@@ -1345,6 +1356,7 @@ async function syncEnabledFromBackground() {
 }
 
 (async function init() {
+  await loadServerConfig();
   els.serverInfo.textContent = WS_URL;
 
   const stored = await chrome.storage.local.get(['default_author', 'history_cap', 'wrap_code', 'ms_open_script']);

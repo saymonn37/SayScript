@@ -70,6 +70,8 @@ Download the repo (**Code → Download ZIP**, then extract it somewhere permanen
 
 Then add the extension to Chrome (the wizard prints these steps too). A full,
 beginner-friendly walkthrough (in Polish) is in **[INSTALL.pl.md](INSTALL.pl.md)**.
+Default port is **8165**; if it's taken, the installer picks the first free one in 8165–8185
+and writes it to `extension/server-config.json` (git-ignored), which the extension reads.
 To remove everything: `Uninstall-SayScript.bat` / `./install.sh --uninstall`.
 
 ### Manual setup (developers)
@@ -247,7 +249,7 @@ sayscript/
 
 | Symptom | Fix |
 |---|---|
-| Badge grey / dashboard says **offline** | The server isn't running, or something else holds port 8165. Restart `./start.sh` (or `start.bat`), or pass `--port=8166`. |
+| Badge grey / dashboard says **offline** | The server isn't running, or something else holds port 8165. Re-run the installer (it picks a free port automatically), or restart `./start.sh` / `start.bat`. |
 | **Scripts don't inject** | Enable **“Allow user scripts”** on the extension's Details page. Check the service-worker console (`chrome://extensions` → SayScript → *Inspect views: service worker*) for `registered N/M script(s)`. |
 | **`GM_xmlhttpRequest` fails** | Use the GM API for cross-origin calls — a plain `fetch()` inside your script is still subject to page CORS. The worker logs the real error in the service-worker console. |
 | **Changed `server.php` but nothing changed** | PHP doesn't hot-reload — stop the server (Ctrl+C) and start it again. |

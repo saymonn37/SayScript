@@ -26,3 +26,6 @@ desktop.ini
 # Windows launcher/runtime + local Composer (downloaded by the installers)
 /runtime/
 /tools/
+
+# Written by the installers when the default port 8165 was busy
+/extension/server-config.json

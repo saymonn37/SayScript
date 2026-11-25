@@ -6,7 +6,7 @@
 #  3. ustawia automatyczny start serwera po zalogowaniu do Windows (ukryte okno),
 #  4. uruchamia serwer i sprawdza, czy dziala, a potem prowadzi przez wgranie rozszerzenia.
 # (Komunikaty celowo bez polskich znakow - zgodnosc z Windows PowerShell 5.1.)
-param([int]$Port = 8165, [switch]$Uninstall, [switch]$NoAutostart)
+param([int]$Port = 0, [switch]$Uninstall, [switch]$NoAutostart)
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'      # bez tego Invoke-WebRequest jest bardzo wolny
@@ -28,7 +28,17 @@ function Step($n, $t) { Write-Host ''; Write-Host "[$n] $t" -ForegroundColor Gre
 function Ok($t)       { Write-Host "  OK  $t" -ForegroundColor Green }
 function Warn($t)     { Write-Host "  !   $t" -ForegroundColor Yellow }
 function Die($t)      { Write-Host "  BLAD: $t" -ForegroundColor Red; Read-Host 'Nacisnij Enter, aby zamknac'; exit 1 }
-function Test-Port    { try { $c = New-Object Net.Sockets.TcpClient; $c.Connect('127.0.0.1', $Port); $c.Close(); $true } catch { $false } }
+function Test-PortNum($p) { try { $c = New-Object Net.Sockets.TcpClient; $c.Connect('127.0.0.1', $p); $c.Close(); $true } catch { $false } }
+function Test-Port    { Test-PortNum $Port }
+# czy port trzyma nasz wlasny serwer (php.exe z folderu runtime\php) - np. poprzednia instalacja
+function Test-PortOurs($p) {
+    try {
+        $conn = Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction Stop | Select-Object -First 1
+        $proc = Get-CimInstance Win32_Process -Filter "ProcessId=$($conn.OwningProcess)" -ErrorAction Stop
+        return ($proc.ExecutablePath -like "$PhpDir*")
+    } catch { return $false }
+}
+function Test-PortUsable($p) { (-not (Test-PortNum $p)) -or (Test-PortOurs $p) }
 function Stop-Server {
     # zatrzymaj tylko procesy php uruchomione z NASZEGO folderu
     Get-CimInstance Win32_Process -Filter "Name='php.exe'" -ErrorAction SilentlyContinue |
@@ -36,12 +46,17 @@ function Stop-Server {
         ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 }
 
-if ($Uninstall) {
-    Step '-' 'Usuwanie SayScript z autostartu'
-    Remove-Item $StartupVbs -Force -ErrorAction SilentlyContinue
+function Stop-Launcher {
+    # zatrzymaj petle restartu (cmd /c run-server.cmd), inaczej wskrzesilaby stary serwer
     Get-CimInstance Win32_Process -Filter "Name='cmd.exe'" -ErrorAction SilentlyContinue |
         Where-Object { $_.CommandLine -like '*run-server.cmd*' } |
         ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+}
+
+if ($Uninstall) {
+    Step '-' 'Usuwanie SayScript z autostartu'
+    Remove-Item $StartupVbs -Force -ErrorAction SilentlyContinue
+    Stop-Launcher
     Stop-Server
     Ok 'Autostart usuniety, serwer zatrzymany. Twoje skrypty zostaly nietkniete.'
     Write-Host '  Rozszerzenie usun recznie w chrome://extensions.'
@@ -93,8 +108,24 @@ New-Item -ItemType Directory -Force -Path $Scripts | Out-Null
 Ok "Folder na skrypty: $Scripts"
 
 # ------------------------------------------------------------------ 3. autostart
-Step '3/4' 'Ustawiam automatyczne uruchamianie serwera po zalogowaniu'
-if (Test-Port) { Warn "Port $Port jest zajety - zatrzymuje poprzedni serwer SayScript (jesli to on)."; Stop-Server; Start-Sleep 1 }
+Step '3/4' 'Wybieram port i ustawiam automatyczne uruchamianie serwera'
+$DefaultPort = 8165; $PoolEnd = 8185          # pula portow: 8165-8185
+$ConfigJson = Join-Path $Root 'extension\server-config.json'
+if ($Port -eq 0) {
+    $cands = @()
+    if (Test-Path $ConfigJson) { try { $cands += [int](Get-Content $ConfigJson -Raw | ConvertFrom-Json).port } catch {} }
+    $cands += $DefaultPort..$PoolEnd
+    $Port = ($cands | Where-Object { Test-PortUsable $_ } | Select-Object -First 1)
+    if (-not $Port) { Die "Wszystkie porty $DefaultPort-$PoolEnd sa zajete. Zwolnij ktorys albo uruchom: install.ps1 -Port NUMER" }
+    if ($Port -ne $DefaultPort) { Warn "Domyslny port $DefaultPort jest zajety przez inny program - uzywam wolnego portu $Port." }
+} elseif (-not (Test-PortUsable $Port)) {
+    Die "Port $Port jest zajety przez inny program. Wybierz inny (-Port) albo pomin ta opcje - kreator sam znajdzie wolny."
+}
+Ok "Port serwera: $Port"
+# zapisz port dla rozszerzenia (czytany przy kazdym polaczeniu)
+Set-Content -Path $ConfigJson -Value ('{"port": ' + $Port + '}') -Encoding ASCII
+Ok 'Zapisano ustawienia rozszerzenia (extension\server-config.json)'
+Stop-Launcher; Stop-Server; Start-Sleep 1   # zastap poprzedni serwer SayScript (petla restartu + php)
 # launcher z petla: jesli serwer sie wywroci, wstaje ponownie po 5 s
 $cmd = @"
 @echo off
@@ -140,6 +171,9 @@ Write-Host @"
   4. Na karcie SayScript kliknij "Szczegoly" (Details) i wlacz
      "Zezwalaj na skrypty uzytkownika" (Allow user scripts).
   5. Przypnij ikone SayScript (puzzel na pasku -> pinezka) i kliknij ja - otworzy sie panel.
+
+  Jesli rozszerzenie bylo juz zaladowane: kliknij ikone odswiezenia przy SayScript w chrome://extensions
+  (po zmianie portu to wystarczy - wszystkie skrypty zostaja).
 
   Pelna instrukcja i rozwiazywanie problemow: INSTALL.pl.md
   Nie przenos ani nie usuwaj folderu SayScript - Chrome wczytuje rozszerzenie prosto z niego.

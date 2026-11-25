@@ -19,7 +19,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SERVER_DIR="$SCRIPT_DIR/server"
 
 # --- defaults (overridable by env or flags) ----------------------------------
-PORT="${PORT:-8165}"
+# port chosen by the installer (extension/server-config.json), else 8165
+CFG_PORT="$(grep -o '"port"[^0-9]*[0-9]*' "$SCRIPT_DIR/extension/server-config.json" 2>/dev/null | grep -o '[0-9]*$' || true)"
+PORT="${PORT:-${CFG_PORT:-8165}}"
 SCRIPTS_DIR="${SCRIPTS_DIR:-$SCRIPT_DIR/scripts}"
 INTERVAL="${INTERVAL:-1.0}"
 

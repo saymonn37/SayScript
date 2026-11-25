@@ -7,7 +7,23 @@ import { state, persistScripts } from './store.js';
 import { syncRegistrations } from './registration.js';
 import { updateBadge } from './badge.js';
 
-const WS_URL = 'ws://localhost:8165';
+const DEFAULT_PORT = 8165;
+let WS_URL = `ws://localhost:${DEFAULT_PORT}`;
+let connectPending = false;
+
+/** The installer writes server-config.json ({"port": N}) — used when the default
+ *  port was taken. Missing/invalid file → default port. Re-read on every attempt
+ *  so a port change is picked up without reloading the extension. */
+async function loadServerUrl() {
+  try {
+    const res = await fetch(chrome.runtime.getURL('server-config.json'), { cache: 'no-store' });
+    if (res.ok) {
+      const port = Number((await res.json()).port);
+      if (Number.isInteger(port) && port > 0 && port < 65536) return `ws://localhost:${port}`;
+    }
+  } catch { /* no config → default */ }
+  return `ws://localhost:${DEFAULT_PORT}`;
+}
 
 let socket = null;
 let reconnectTimer = null;
@@ -17,6 +33,15 @@ let changeDebounce = null;
 
 export function connect() {
   clearTimeout(reconnectTimer);
+  if (connectPending) return;
+  connectPending = true;
+  loadServerUrl().then((url) => { WS_URL = url; }).finally(() => {
+    connectPending = false;
+    doConnect();
+  });
+}
+
+function doConnect() {
 
   // Never open a second socket if one is already live or handshaking.
   if (socket && (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN)) {

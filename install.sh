@@ -12,7 +12,7 @@
 # Użycie:
 #   ./install.sh                 # pełna instalacja
 #   ./install.sh --no-service    # tylko zależności (serwer uruchomisz ręcznie: ./start.sh)
-#   ./install.sh --port 8166     # inny port (musisz go też zmienić w rozszerzeniu!)
+#   ./install.sh --port 8170     # wymuś port (domyślnie 8165; gdy zajęty — pierwszy wolny z 8165-8185)
 #   ./install.sh --uninstall     # usuwa usługę (pliki i skrypty zostają)
 #   ./install.sh --yes           # nie pytaj o nic (zakłada "tak")
 #
@@ -22,7 +22,10 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SERVER_DIR="$ROOT/server"
 SCRIPTS_DIR="$ROOT/scripts"
 TOOLS_DIR="$ROOT/tools"
-PORT=8165
+PORT=
+DEFAULT_PORT=8165
+POOL_END=8185          # pula portów: 8165-8185
+CONFIG_JSON="$ROOT/extension/server-config.json"
 DO_SERVICE=1
 UNINSTALL=0
 ASSUME_YES=0
@@ -121,21 +124,59 @@ fi
 mkdir -p "$SCRIPTS_DIR"
 ok "Folder na skrypty: $SCRIPTS_DIR"
 
-# ---------------------------------------------------------------- 3. usługa
-SERVER_CMD=("$PHP_BIN" "$SERVER_DIR/server.php" "--port=$PORT" "--dir=$SCRIPTS_DIR" "--interval=1.0")
-
-port_listening() {
-  if command -v ss >/dev/null 2>&1; then ss -ltn 2>/dev/null | grep -q "[:.]$PORT "
-  elif command -v lsof >/dev/null 2>&1; then lsof -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1
-  else (exec 3<>"/dev/tcp/127.0.0.1/$PORT") 2>/dev/null
+# ---------------------------------------------------------------- 3. port + usługa
+port_pid() {   # PID procesu słuchającego na porcie $1 (puste = wolny / nieznany)
+  local p="$1" pid=""
+  if command -v ss >/dev/null 2>&1; then
+    pid="$(ss -ltnp "sport = :$p" 2>/dev/null | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2 || true)"
+  fi
+  if [[ -z "$pid" ]] && command -v lsof >/dev/null 2>&1; then
+    pid="$(lsof -ti tcp:"$p" -sTCP:LISTEN 2>/dev/null | head -1 || true)"
+  fi
+  echo "$pid"
+}
+port_in_use() {
+  if command -v ss >/dev/null 2>&1; then ss -ltn 2>/dev/null | grep -qE "[:.]$1[[:space:]]"
+  elif command -v lsof >/dev/null 2>&1; then lsof -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1
+  else (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null
   fi
 }
+port_is_ours() {   # czy port trzyma nasz własny serwer SayScript (poprzednia instalacja)
+  local pid; pid="$(port_pid "$1")"
+  [[ -n "$pid" ]] && ps -p "$pid" -o args= 2>/dev/null | grep -qF "$SERVER_DIR/server.php"
+}
+port_usable() { ! port_in_use "$1" || port_is_ours "$1"; }
+port_listening() { port_in_use "$PORT"; }
+
+if [[ -z "$PORT" ]]; then
+  PREV=""
+  [[ -f "$CONFIG_JSON" ]] && PREV="$(grep -o '"port"[^0-9]*[0-9]*' "$CONFIG_JSON" | grep -o '[0-9]*$' || true)"
+  CHOSEN=""
+  for cand in $PREV $(seq "$DEFAULT_PORT" "$POOL_END"); do
+    if port_usable "$cand"; then CHOSEN="$cand"; break; fi
+  done
+  [[ -n "$CHOSEN" ]] || die "Wszystkie porty $DEFAULT_PORT-$POOL_END są zajęte. Zwolnij któryś albo podaj własny: ./install.sh --port NUMER"
+  PORT="$CHOSEN"
+  if [[ "$PORT" != "$DEFAULT_PORT" ]]; then
+    warn "Domyślny port $DEFAULT_PORT jest zajęty przez inny program — używam wolnego portu $PORT."
+  fi
+else
+  port_usable "$PORT" || die "Port $PORT jest zajęty przez inny program. Wybierz inny (--port) albo pomiń tę opcję, a kreator sam znajdzie wolny."
+fi
+ok "Port serwera: $PORT"
+
+# zapisz port dla rozszerzenia (czytane przy każdym połączeniu)
+printf '{"port": %s}\n' "$PORT" > "$CONFIG_JSON"
+ok "Zapisano ustawienia rozszerzenia (extension/server-config.json)"
+
+SERVER_CMD=("$PHP_BIN" "$SERVER_DIR/server.php" "--port=$PORT" "--dir=$SCRIPTS_DIR" "--interval=1.0")
 
 if [[ $DO_SERVICE -eq 1 ]]; then
   step "3/4" "Ustawiam automatyczne uruchamianie serwera po zalogowaniu"
-  if port_listening; then
-    warn "Port $PORT jest już zajęty (np. serwer SayScript uruchomiony ręcznie przez start.sh)."
-    warn "Zamknij go (Ctrl+C w jego oknie) — usługa przejmie jego rolę."
+  if port_is_ours "$PORT"; then   # poprzedni serwer SayScript (ręczny lub usługa) — zastąpimy go nowym
+    systemctl --user stop "$SERVICE_NAME.service" 2>/dev/null || true
+    OLD="$(port_pid "$PORT")"; if [[ -n "$OLD" ]]; then kill "$OLD" 2>/dev/null || true; fi
+    sleep 1
   fi
   if [[ $PLATFORM == linux ]]; then
     command -v systemctl >/dev/null || die "Brak systemd. Użyj ./install.sh --no-service i uruchamiaj ./start.sh ręcznie."
@@ -204,6 +245,8 @@ ${c_bld}${c_grn}Serwer gotowy.${c_off} Został ostatni krok — wgranie rozszerz
      ${c_bld}Zezwalaj na skrypty użytkownika${c_off} (Allow user scripts).
   5. Przypnij ikonę SayScript (puzzel na pasku → pinezka) i kliknij ją — otworzy się panel.
 
+Jeśli rozszerzenie było już załadowane: kliknij w chrome://extensions ikonę odświeżenia przy SayScript
+(po zmianie portu to wystarczy — wszystkie skrypty zostają).
 Pełna instrukcja ze zdjęciowymi wskazówkami i rozwiązywaniem problemów: INSTALL.pl.md
 Nie przenoś ani nie usuwaj folderu SayScript — Chrome wczytuje rozszerzenie prosto z niego.
 EOF
