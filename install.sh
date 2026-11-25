@@ -3,11 +3,13 @@
 # SayScript — kreator instalacji (Linux + macOS).
 #
 # Robi wszystko za Ciebie:
-#   1. sprawdza PHP (i proponuje jego instalację),
-#   2. pobiera Composera lokalnie i instaluje zależności serwera,
-#   3. ustawia serwer jako usługę uruchamiającą się sama po zalogowaniu
+#   1. kopiuje aplikację do stałego katalogu (Linux: ~/.local/share/sayscript,
+#      macOS: ~/Library/Application Support/SayScript) — pobrany folder można potem usunąć,
+#   2. sprawdza PHP (i proponuje jego instalację),
+#   3. pobiera Composera lokalnie i instaluje zależności serwera,
+#   4. ustawia serwer jako usługę uruchamiającą się sama po zalogowaniu
 #      (Linux: systemd --user, macOS: launchd) — NIE wymaga sudo ani roota,
-#   4. sprawdza, czy serwer odpowiada, i pokazuje, jak wgrać rozszerzenie do Chrome.
+#   5. sprawdza, czy serwer odpowiada, i pokazuje, jak wgrać rozszerzenie do Chrome.
 #
 # Użycie:
 #   ./install.sh                 # pełna instalacja
@@ -15,17 +17,20 @@
 #   ./install.sh --port 8170     # wymuś port (domyślnie 8165; gdy zajęty — pierwszy wolny z 8165-8185)
 #   ./install.sh --uninstall     # usuwa usługę (pliki i skrypty zostają)
 #   ./install.sh --yes           # nie pytaj o nic (zakłada "tak")
+#   ./install.sh --dir ŚCIEŻKA   # zainstaluj w innym katalogu
+#   ./install.sh --in-place      # tryb dewelopera: nie kopiuj, działaj z tego folderu
 #
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SERVER_DIR="$ROOT/server"
-SCRIPTS_DIR="$ROOT/scripts"
-TOOLS_DIR="$ROOT/tools"
+SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"     # skąd uruchomiono (np. Pobrane/SayScript)
+case "$(uname -s)" in
+  Darwin) DEFAULT_APP="$HOME/Library/Application Support/SayScript" ;;
+  *)      DEFAULT_APP="${XDG_DATA_HOME:-$HOME/.local/share}/sayscript" ;;
+esac
+APP="${SAYSCRIPT_INSTALL_DIR:-$DEFAULT_APP}"             # dokąd instalujemy (stały katalog)
 PORT=
 DEFAULT_PORT=8165
 POOL_END=8185          # pula portów: 8165-8185
-CONFIG_JSON="$ROOT/extension/server-config.json"
 DO_SERVICE=1
 UNINSTALL=0
 ASSUME_YES=0
@@ -36,11 +41,19 @@ while [[ $# -gt 0 ]]; do
     --port)       PORT="$2"; shift 2 ;;
     --no-service) DO_SERVICE=0; shift ;;
     --uninstall)  UNINSTALL=1; shift ;;
+    --dir)        APP="$2"; shift 2 ;;
+    --in-place)   APP="$SRC"; shift ;;
     --yes|-y)     ASSUME_YES=1; shift ;;
     -h|--help)    grep '^#' "$0" | sed 's/^# \{0,1\}//; 1d'; exit 0 ;;
     *) echo "Nieznana opcja: $1" >&2; exit 1 ;;
   esac
 done
+
+ROOT="$APP"
+SERVER_DIR="$ROOT/server"
+SCRIPTS_DIR="$ROOT/scripts"
+TOOLS_DIR="$ROOT/tools"
+CONFIG_JSON="$ROOT/extension/server-config.json"
 
 c_grn=$'\033[32m'; c_red=$'\033[31m'; c_yel=$'\033[33m'; c_bld=$'\033[1m'; c_off=$'\033[0m'
 step() { echo; echo "${c_bld}${c_grn}[$1]${c_off} ${c_bld}$2${c_off}"; }
@@ -74,6 +87,7 @@ if [[ $UNINSTALL -eq 1 ]]; then
   fi
   ok "Usługa usunięta. Twoje skrypty w $SCRIPTS_DIR zostały nietknięte."
   echo "  Rozszerzenie usuń ręcznie w chrome://extensions."
+  echo "  Aby usunąć aplikację całkowicie: skopiuj skrypty z $SCRIPTS_DIR, a potem  rm -rf \"$ROOT\""
   exit 0
 fi
 
@@ -81,8 +95,36 @@ echo "================================================"
 echo "  SayScript — kreator instalacji"
 echo "================================================"
 
-# ---------------------------------------------------------------- 1. PHP
-step "1/4" "Sprawdzam PHP (potrzebne 8.1 lub nowsze)"
+# ---------------------------------------------------------------- 1. kopiowanie do stałego katalogu
+if [[ "$APP" == "$SRC" ]]; then
+  step "1/5" "Tryb in-place — aplikacja zostaje w $SRC"
+else
+  step "1/5" "Instaluję aplikację w $APP"
+  mkdir -p "$APP/server"
+  CFG_BAK=""; if [[ -f "$CONFIG_JSON" ]]; then CFG_BAK="$(cat "$CONFIG_JSON")"; fi
+  rm -rf "$APP/extension" "$APP/server/src"           # kod aplikacji zawsze świeży (skrypty i vendor/ zostają)
+  cp -a "$SRC/extension" "$APP/extension"
+  rm -f "$APP/extension/server-config.json"
+  if [[ -n "$CFG_BAK" ]]; then printf '%s\n' "$CFG_BAK" > "$CONFIG_JSON"; fi
+  cp -a "$SRC/server/src" "$SRC/server/server.php" "$SRC/server/composer.json" "$SRC/server/composer.lock" "$APP/server/"
+  for f in install.sh start.sh README.md INSTALL.pl.md LICENSE; do
+    if [[ -f "$SRC/$f" ]]; then cp -a "$SRC/$f" "$APP/$f"; fi
+  done
+  mkdir -p "$APP/scripts"
+  # przenieś (skopiuj) skrypty użytkownika z pobranego folderu, jeśli instalacja jest jeszcze pusta
+  HAVE_USER="$(find "$APP/scripts" -maxdepth 1 -name '*.user.js' ! -name example.user.js 2>/dev/null | head -1 || true)"
+  SRC_USER="$(find "$SRC/scripts" -maxdepth 1 -name '*.user.js' ! -name example.user.js 2>/dev/null | head -1 || true)"
+  if [[ -z "$HAVE_USER" && -n "$SRC_USER" ]]; then
+    cp -an "$SRC/scripts/." "$APP/scripts/"
+    ok "Skopiowano Twoje skrypty z $SRC/scripts (oryginały zostają nietknięte)."
+  elif [[ -f "$SRC/scripts/example.user.js" && ! -f "$APP/scripts/example.user.js" && -z "$HAVE_USER" ]]; then
+    cp -a "$SRC/scripts/example.user.js" "$APP/scripts/"
+  fi
+  ok "Aplikacja zainstalowana w stałym katalogu."
+fi
+
+# ---------------------------------------------------------------- 2. PHP
+step "2/5" "Sprawdzam PHP (potrzebne 8.1 lub nowsze)"
 php_ok() { command -v php >/dev/null 2>&1 && php -r 'exit(version_compare(PHP_VERSION,"8.1.0",">=")?0:1);'; }
 
 if ! php_ok; then
@@ -102,7 +144,7 @@ PHP_BIN="$(command -v php)"
 ok "PHP $(php -r 'echo PHP_VERSION;') ($PHP_BIN)"
 
 # ---------------------------------------------------------------- 2. zależności
-step "2/4" "Instaluję zależności serwera (biblioteka WebSocket)"
+step "3/5" "Instaluję zależności serwera (biblioteka WebSocket)"
 if [[ ! -f "$SERVER_DIR/vendor/autoload.php" ]]; then
   if command -v composer >/dev/null 2>&1; then
     COMPOSER=(composer)
@@ -143,7 +185,7 @@ port_in_use() {
 }
 port_is_ours() {   # czy port trzyma nasz własny serwer SayScript (poprzednia instalacja)
   local pid; pid="$(port_pid "$1")"
-  [[ -n "$pid" ]] && ps -p "$pid" -o args= 2>/dev/null | grep -qF "$SERVER_DIR/server.php"
+  [[ -n "$pid" ]] && ps -p "$pid" -o args= 2>/dev/null | grep -qE -e "$SERVER_DIR/server.php" -e "$SRC/server/server.php"
 }
 port_usable() { ! port_in_use "$1" || port_is_ours "$1"; }
 port_listening() { port_in_use "$PORT"; }
@@ -172,7 +214,7 @@ ok "Zapisano ustawienia rozszerzenia (extension/server-config.json)"
 SERVER_CMD=("$PHP_BIN" "$SERVER_DIR/server.php" "--port=$PORT" "--dir=$SCRIPTS_DIR" "--interval=1.0")
 
 if [[ $DO_SERVICE -eq 1 ]]; then
-  step "3/4" "Ustawiam automatyczne uruchamianie serwera po zalogowaniu"
+  step "4/5" "Ustawiam automatyczne uruchamianie serwera po zalogowaniu"
   if port_is_ours "$PORT"; then   # poprzedni serwer SayScript (ręczny lub usługa) — zastąpimy go nowym
     systemctl --user stop "$SERVICE_NAME.service" 2>/dev/null || true
     OLD="$(port_pid "$PORT")"; if [[ -n "$OLD" ]]; then kill "$OLD" 2>/dev/null || true; fi
@@ -219,11 +261,11 @@ EOF
     ok "Agent launchd (dev.$SERVICE_NAME) załadowany — startuje sam po zalogowaniu."
   fi
 else
-  step "3/4" "Pomijam usługę (--no-service) — serwer uruchomisz poleceniem ./start.sh"
+  step "4/5" "Pomijam usługę (--no-service) — serwer uruchomisz poleceniem ./start.sh"
 fi
 
 # ---------------------------------------------------------------- 4. weryfikacja
-step "4/4" "Sprawdzam, czy serwer działa"
+step "5/5" "Sprawdzam, czy serwer działa"
 if [[ $DO_SERVICE -eq 1 ]]; then
   UP=0; for _ in 1 2 3 4 5 6 7 8 9 10; do port_listening && { UP=1; break; }; sleep 1; done
   if [[ $UP -eq 1 ]]; then ok "Serwer nasłuchuje na ws://localhost:$PORT"
@@ -248,7 +290,8 @@ ${c_bld}${c_grn}Serwer gotowy.${c_off} Został ostatni krok — wgranie rozszerz
 Jeśli rozszerzenie było już załadowane: kliknij w chrome://extensions ikonę odświeżenia przy SayScript
 (po zmianie portu to wystarczy — wszystkie skrypty zostają).
 Pełna instrukcja ze zdjęciowymi wskazówkami i rozwiązywaniem problemów: INSTALL.pl.md
-Nie przenoś ani nie usuwaj folderu SayScript — Chrome wczytuje rozszerzenie prosto z niego.
+Rozszerzenie wczytuje się z $ROOT/extension — tego folderu nie usuwaj ani nie przenoś.
+$( [[ "$APP" != "$SRC" ]] && echo "Pobrany folder ($SRC) możesz już usunąć." )
 EOF
 
 # spróbuj otworzyć stronę rozszerzeń (jeśli jest przeglądarka i środowisko graficzne)

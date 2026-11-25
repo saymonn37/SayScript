@@ -15,12 +15,18 @@ Potrzebujesz: komputera z **Windows 10/11, Linuksem lub macOS**, przeglądarki
 
 1. Wejdź na https://github.com/saymonn37/SayScript
 2. Kliknij zielony przycisk **Code → Download ZIP**.
-3. **Rozpakuj** pobrany plik w miejscu, w którym zostanie na stałe
-   (np. `C:\Programy\SayScript` albo `Dokumenty\SayScript`).
+3. **Rozpakuj** pobrany plik gdziekolwiek (np. w Pobranych) — to tylko folder startowy.
 
-> ⚠️ **Nie przenoś i nie usuwaj tego folderu po instalacji** — Chrome wczytuje rozszerzenie
-> prosto z niego, a serwer też z niego startuje. Chcesz go przenieść? Najpierw odinstaluj
-> (patrz niżej), przenieś, zainstaluj ponownie.
+> ℹ️ Kreator **skopiuje aplikację do stałego katalogu** i stamtąd będzie działać, więc po
+> instalacji możesz pobrany folder usunąć:
+>
+> | System | Gdzie jest zainstalowana aplikacja |
+> |---|---|
+> | Windows | `%LOCALAPPDATA%\SayScript` (czyli `C:\Users\<Ty>\AppData\Local\SayScript`) |
+> | Linux | `~/.local/share/sayscript` |
+> | macOS | `~/Library/Application Support/SayScript` |
+>
+> Tam też leży Twój folder `scripts/` i tam wskazujesz rozszerzenie w Chrome (krok 3).
 
 ## Krok 2 — Uruchom kreator instalacji (serwer)
 
@@ -59,8 +65,11 @@ ręcznie („Załaduj rozpakowane”). Kreator pokazuje te same kroki na końcu:
    (w Edge: `edge://extensions`, w Brave: `brave://extensions`).
 2. Włącz **Tryb programisty** (*Developer mode*) — przełącznik **w prawym górnym rogu**.
 3. Kliknij **Załaduj rozpakowane** (*Load unpacked*) i wybierz folder **`extension`**
-   wewnątrz folderu SayScript (np. `C:\Programy\SayScript\extension`).
+   wewnątrz **stałego katalogu aplikacji** z tabeli wyżej
+   (np. `C:\Users\<Ty>\AppData\Local\SayScript\extension`; kreator wkleja tę ścieżkę do schowka
+   i wypisuje ją na końcu).
    Wybierasz sam folder `extension`, **nie** plik i nie cały SayScript.
+   (W oknie wyboru folderu w Windows `AppData` jest ukryty — wklej ścieżkę Ctrl+V.)
 4. Na karcie „SayScript” kliknij **Szczegóły** (*Details*) i włącz
    **Zezwalaj na skrypty użytkownika** (*Allow user scripts*).
    *Bez tego skrypty się nie uruchomią* — to najczęściej pomijany krok.
@@ -103,17 +112,18 @@ ikonę odświeżenia przy SayScript w `chrome://extensions` (skrypty zostają).
 | Po restarcie komputera serwer nie wstaje (Windows) | Sprawdź, czy w `shell:startup` (Win+R) jest plik `SayScript-server.vbs`. Jeśli nie — uruchom kreator ponownie. |
 | Zmieniłem plik `server/*.php` i bez efektu | Serwer trzeba zrestartować (Windows: wyloguj się i zaloguj / zabij `php.exe`; Linux: `systemctl --user restart sayscript`). |
 
-Ręczne uruchomienie serwera (do diagnozy, pokaże błędy w oknie):
+Ręczne uruchomienie serwera (do diagnozy, pokaże błędy w oknie), z katalogu aplikacji:
 Windows — `runtime\run-server.cmd`; Linux/macOS — `./start.sh`.
 
 ## Odinstalowanie
 
-- **Windows:** dwuklik **`Uninstall-SayScript.bat`** (usuwa autostart i zatrzymuje serwer).
-- **Linux/macOS:** `./install.sh --uninstall`
-- Potem usuń rozszerzenie w `chrome://extensions` i (opcjonalnie) cały folder SayScript.
-  **Twoje skrypty są w `scripts/`** — skopiuj je wcześniej, jeśli chcesz je zachować.
+- **Windows:** dwuklik **`Uninstall-SayScript.bat`** (w katalogu aplikacji; usuwa autostart i zatrzymuje serwer).
+- **Linux/macOS:** `~/.local/share/sayscript/install.sh --uninstall` (macOS: w `~/Library/Application Support/SayScript`)
+- Potem usuń rozszerzenie w `chrome://extensions` i (opcjonalnie) katalog aplikacji.
+  **Twoje skrypty są w jego podfolderze `scripts/`** — skopiuj je wcześniej, jeśli chcesz je zachować.
 
 ## Aktualizacja
 
-Pobierz nowy ZIP (albo `git pull`), podmień pliki **poza folderem `scripts/`** i uruchom kreator
-ponownie. W `chrome://extensions` kliknij ikonę odświeżenia przy SayScript.
+Pobierz nowy ZIP, rozpakuj go i uruchom kreator ponownie. Podmieni kod aplikacji w stałym
+katalogu, a **Twoje skrypty, port i zależności zostają**. W `chrome://extensions` kliknij ikonę
+odświeżenia przy SayScript.

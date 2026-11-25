@@ -70,6 +70,11 @@ Download the repo (**Code → Download ZIP**, then extract it somewhere permanen
 
 Then add the extension to Chrome (the wizard prints these steps too). A full,
 beginner-friendly walkthrough (in Polish) is in **[INSTALL.pl.md](INSTALL.pl.md)**.
+The wizard **copies the app to a permanent per-user folder** (`%LOCALAPPDATA%\SayScript`, `~/.local/share/sayscript`,
+`~/Library/Application Support/SayScript`) — so the downloaded folder can be deleted afterwards. It copies any scripts
+from the download's `scripts/` on first install and keeps your scripts/port/dependencies on updates. Developers can
+keep running from the repo with `./install.sh --in-place` (`install.ps1 -InPlace`).
+
 Default port is **8165**; if it's taken, the installer picks the first free one in 8165–8185
 and writes it to `extension/server-config.json` (git-ignored), which the extension reads.
 To remove everything: `Uninstall-SayScript.bat` / `./install.sh --uninstall`.

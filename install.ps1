@@ -1,18 +1,24 @@
 # SayScript - kreator instalacji (Windows)
 #
 # Uruchamiany przez Install-SayScript.bat (dwuklik). Nie wymaga uprawnien administratora.
-#  1. pobiera przenosne PHP do folderu runtime\ (nic nie instaluje w systemie),
-#  2. pobiera Composera i instaluje zaleznosci serwera,
-#  3. ustawia automatyczny start serwera po zalogowaniu do Windows (ukryte okno),
-#  4. uruchamia serwer i sprawdza, czy dziala, a potem prowadzi przez wgranie rozszerzenia.
+#  1. kopiuje aplikacje do stalego katalogu %LOCALAPPDATA%\SayScript (pobrany folder mozna potem usunac),
+#  2. pobiera przenosne PHP do jego podfolderu runtime\ (nic nie instaluje w systemie),
+#  3. pobiera Composera i instaluje zaleznosci serwera,
+#  4. wybiera wolny port i ustawia automatyczny start serwera po zalogowaniu (ukryte okno),
+#  5. uruchamia serwer, sprawdza, czy dziala, i prowadzi przez wgranie rozszerzenia.
 # (Komunikaty celowo bez polskich znakow - zgodnosc z Windows PowerShell 5.1.)
-param([int]$Port = 0, [switch]$Uninstall, [switch]$NoAutostart)
+param([int]$Port = 0, [switch]$Uninstall, [switch]$NoAutostart, [switch]$InPlace, [string]$InstallDir = '')
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'      # bez tego Invoke-WebRequest jest bardzo wolny
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$Root       = Split-Path -Parent $MyInvocation.MyCommand.Path
+$Src        = Split-Path -Parent $MyInvocation.MyCommand.Path     # skad uruchomiono (np. Pobrane\SayScript)
+if ($InPlace)                        { $Root = $Src }
+elseif ($InstallDir)                 { $Root = $InstallDir }
+elseif ($env:SAYSCRIPT_INSTALL_DIR)  { $Root = $env:SAYSCRIPT_INSTALL_DIR }
+else                                 { $Root = Join-Path $env:LOCALAPPDATA 'SayScript' }   # staly katalog aplikacji
+$SameDir    = ($Root.TrimEnd('\') -ieq $Src.TrimEnd('\'))
 $Server     = Join-Path $Root 'server'
 $Scripts    = Join-Path $Root 'scripts'
 $Runtime    = Join-Path $Root 'runtime'
@@ -22,6 +28,7 @@ $Composer   = Join-Path $Runtime 'composer.phar'
 $Launcher   = Join-Path $Runtime 'run-server.cmd'
 $Startup    = [Environment]::GetFolderPath('Startup')
 $StartupVbs = Join-Path $Startup 'SayScript-server.vbs'
+$OldPhpDir  = Join-Path $Src 'runtime\php'   # serwer z wczesniejszej instalacji 'w miejscu'
 $PhpUrl     = 'https://windows.php.net/downloads/releases/latest/php-8.3-nts-Win32-vs16-x64-latest.zip'
 
 function Step($n, $t) { Write-Host ''; Write-Host "[$n] $t" -ForegroundColor Green }
@@ -35,14 +42,14 @@ function Test-PortOurs($p) {
     try {
         $conn = Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction Stop | Select-Object -First 1
         $proc = Get-CimInstance Win32_Process -Filter "ProcessId=$($conn.OwningProcess)" -ErrorAction Stop
-        return ($proc.ExecutablePath -like "$PhpDir*")
+        return (($proc.ExecutablePath -like "$PhpDir*") -or ($proc.ExecutablePath -like "$OldPhpDir*"))
     } catch { return $false }
 }
 function Test-PortUsable($p) { (-not (Test-PortNum $p)) -or (Test-PortOurs $p) }
 function Stop-Server {
     # zatrzymaj tylko procesy php uruchomione z NASZEGO folderu
     Get-CimInstance Win32_Process -Filter "Name='php.exe'" -ErrorAction SilentlyContinue |
-        Where-Object { $_.ExecutablePath -like "$PhpDir*" } |
+        Where-Object { ($_.ExecutablePath -like "$PhpDir*") -or ($_.ExecutablePath -like "$OldPhpDir*") } |
         ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 }
 
@@ -59,6 +66,7 @@ if ($Uninstall) {
     Stop-Launcher
     Stop-Server
     Ok 'Autostart usuniety, serwer zatrzymany. Twoje skrypty zostaly nietkniete.'
+    Write-Host "  Aby usunac aplikacje calkowicie: skopiuj skrypty z $Scripts, a potem usun folder $Root"
     Write-Host '  Rozszerzenie usun recznie w chrome://extensions.'
     Read-Host 'Nacisnij Enter, aby zamknac'
     exit 0
@@ -68,8 +76,42 @@ Write-Host '================================================'
 Write-Host '  SayScript - kreator instalacji'
 Write-Host '================================================'
 
+# ------------------------------------------------------------------ 1. kopiowanie do stalego katalogu
+if ($SameDir) {
+    Step '1/5' "Tryb in-place - aplikacja zostaje w $Src"
+} else {
+    Step '1/5' "Instaluje aplikacje w $Root"
+    New-Item -ItemType Directory -Force -Path (Join-Path $Root 'server'), $Scripts | Out-Null
+    $cfgPath = Join-Path $Root 'extension\server-config.json'
+    $cfgBak = $null; if (Test-Path $cfgPath) { $cfgBak = Get-Content $cfgPath -Raw }
+    # kod aplikacji zawsze swiezy (skrypty uzytkownika i vendor\ zostaja)
+    Remove-Item (Join-Path $Root 'extension'), (Join-Path $Server 'src') -Recurse -Force -ErrorAction SilentlyContinue
+    Copy-Item (Join-Path $Src 'extension') (Join-Path $Root 'extension') -Recurse -Force
+    Remove-Item $cfgPath -Force -ErrorAction SilentlyContinue
+    if ($cfgBak) { Set-Content -Path $cfgPath -Value $cfgBak.Trim() -Encoding ASCII }
+    Copy-Item (Join-Path $Src 'server\src') (Join-Path $Server 'src') -Recurse -Force
+    foreach ($f in 'server\server.php','server\composer.json','server\composer.lock','install.ps1','Install-SayScript.bat','Uninstall-SayScript.bat','start.bat','README.md','INSTALL.pl.md','LICENSE') {
+        $from = Join-Path $Src $f
+        if (Test-Path $from) { Copy-Item $from (Join-Path $Root $f) -Force }
+    }
+    # skopiuj skrypty uzytkownika z pobranego folderu, jesli instalacja jest jeszcze pusta (oryginaly zostaja)
+    $have = @(Get-ChildItem $Scripts -Filter *.user.js -ErrorAction SilentlyContinue | Where-Object Name -ne 'example.user.js')
+    $srcScripts = Join-Path $Src 'scripts'
+    $srcUser = @(); if (Test-Path $srcScripts) { $srcUser = @(Get-ChildItem $srcScripts -Filter *.user.js | Where-Object Name -ne 'example.user.js') }
+    if ($have.Count -eq 0 -and $srcUser.Count -gt 0) {
+        Get-ChildItem $srcScripts -Force | ForEach-Object {
+            $dst = Join-Path $Scripts $_.Name
+            if (-not (Test-Path $dst)) { Copy-Item $_.FullName $dst -Recurse -Force }
+        }
+        Ok "Skopiowano Twoje skrypty z $srcScripts (oryginaly zostaja nietkniete)."
+    } elseif ($have.Count -eq 0 -and (Test-Path (Join-Path $srcScripts 'example.user.js'))) {
+        Copy-Item (Join-Path $srcScripts 'example.user.js') $Scripts -Force
+    }
+    Ok 'Aplikacja zainstalowana w stalym katalogu.'
+}
+
 # ------------------------------------------------------------------ 1. PHP
-Step '1/4' 'Przygotowuje PHP (przenosne, w folderze runtime)'
+Step '2/5' 'Przygotowuje PHP (przenosne, w folderze runtime)'
 if (-not (Test-Path $PhpExe)) {
     New-Item -ItemType Directory -Force -Path $Runtime | Out-Null
     $zip = Join-Path $Runtime 'php.zip'
@@ -91,7 +133,7 @@ if ($LASTEXITCODE -ne 0) { Die 'Pobrane PHP nie uruchamia sie. Brakuje "Visual C
 Ok "PHP $ver"
 
 # ------------------------------------------------------------------ 2. zaleznosci
-Step '2/4' 'Instaluje zaleznosci serwera (biblioteka WebSocket)'
+Step '3/5' 'Instaluje zaleznosci serwera (biblioteka WebSocket)'
 if (-not (Test-Path (Join-Path $Server 'vendor\autoload.php'))) {
     if (-not (Test-Path $Composer)) {
         Write-Host '  Pobieram Composera...'
@@ -108,7 +150,7 @@ New-Item -ItemType Directory -Force -Path $Scripts | Out-Null
 Ok "Folder na skrypty: $Scripts"
 
 # ------------------------------------------------------------------ 3. autostart
-Step '3/4' 'Wybieram port i ustawiam automatyczne uruchamianie serwera'
+Step '4/5' 'Wybieram port i ustawiam automatyczne uruchamianie serwera'
 $DefaultPort = 8165; $PoolEnd = 8185          # pula portow: 8165-8185
 $ConfigJson = Join-Path $Root 'extension\server-config.json'
 if ($Port -eq 0) {
@@ -148,7 +190,7 @@ Set-Content -Path $tmp -Value $vbs -Encoding ASCII
 Start-Process wscript.exe -ArgumentList "`"$tmp`""
 
 # ------------------------------------------------------------------ 4. weryfikacja
-Step '4/4' 'Sprawdzam, czy serwer dziala'
+Step '5/5' 'Sprawdzam, czy serwer dziala'
 $up = $false
 1..15 | ForEach-Object { if (-not $up) { if (Test-Port) { $up = $true } else { Start-Sleep 1 } } }
 if ($up) { Ok "Serwer nasluchuje na ws://localhost:$Port" }
@@ -176,7 +218,8 @@ Write-Host @"
   (po zmianie portu to wystarczy - wszystkie skrypty zostaja).
 
   Pelna instrukcja i rozwiazywanie problemow: INSTALL.pl.md
-  Nie przenos ani nie usuwaj folderu SayScript - Chrome wczytuje rozszerzenie prosto z niego.
+  Rozszerzenie wczytuje sie z folderu podanego wyzej - nie usuwaj go ani nie przenos.
+  Pobrany folder (ten, z ktorego uruchomiles kreator) mozesz juz usunac.
 "@
 try { Set-Clipboard -Value $ext } catch {}
 $a = Read-Host 'Otworzyc teraz Chrome na stronie rozszerzen? [T/n]'
