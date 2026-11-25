@@ -49,17 +49,32 @@ with their own tools:
 | | |
 |---|---|
 | **Browser** | Chrome, Edge, or Brave **v120+** (needs the `chrome.userScripts` API) |
-| **PHP** | **8.1+** on PATH (`php -v`) |
-| **Composer** | Latest ([getcomposer.org](https://getcomposer.org/download/)) |
+| **OS** | Windows 10/11, Linux, macOS |
 
-PHP + Composer are the only dependencies. The single library used (`cboden/ratchet`,
-a WebSocket server) is fetched by Composer; everything else is vanilla.
+**Not a developer?** You don't need to install PHP or Composer by hand — use the
+one-click installer below. (Developers running the server manually need **PHP 8.1+**
+and **Composer**; the only library is `cboden/ratchet`.)
 
 ---
 
 ## Quick start
 
-### 1. Clone & start the server
+### Easiest: the installer wizard
+
+Download the repo (**Code → Download ZIP**, then extract it somewhere permanent), then:
+
+| OS | Run |
+|---|---|
+| **Windows** | double-click **`Install-SayScript.bat`** (portable PHP is downloaded for you; no admin rights; server auto-starts at login) |
+| **Linux / macOS** | `./install.sh` (systemd `--user` / launchd service; no root) |
+
+Then add the extension to Chrome (the wizard prints these steps too). A full,
+beginner-friendly walkthrough (in Polish) is in **[INSTALL.pl.md](INSTALL.pl.md)**.
+To remove everything: `Uninstall-SayScript.bat` / `./install.sh --uninstall`.
+
+### Manual setup (developers)
+
+#### 1. Clone & start the server
 
 **Linux / macOS**
 
@@ -98,10 +113,11 @@ cd server
 composer install
 php server.php                       # defaults: port 8165, ../scripts, poll 1.0s
 php server.php --port=8166 --dir=/path/to/scripts --interval=0.5
+# --host=127.0.0.1 is the default: only this machine can connect
 ```
 </details>
 
-### 2. Load the extension
+#### 2. Load the extension
 
 1. Open `chrome://extensions`.
 2. Turn on **Developer mode** (top-right).
@@ -114,7 +130,7 @@ php server.php --port=8166 --dir=/path/to/scripts --interval=0.5
 The toolbar badge shows how many enabled scripts run on the current tab, and turns
 green when the background worker is connected to the server.
 
-### 3. Add your scripts
+#### 3. Add your scripts
 
 Drop any `.user.js` files into the **`scripts/`** folder (or import a Tampermonkey
 backup — see below). They appear in the dashboard instantly and inject on matching
@@ -169,7 +185,10 @@ Injected before every script (`extension/gm-polyfill.js`):
 
 ```
 sayscript/
-├── start.sh / start.bat     ← one-command setup + launch (Linux·macOS / Windows)
+├── Install-SayScript.bat    ← Windows installer wizard (portable PHP + autostart) — uses install.ps1
+├── install.sh               ← Linux/macOS installer wizard (systemd --user / launchd)
+├── INSTALL.pl.md            ← beginner-friendly install guide (Polish)
+├── start.sh / start.bat     ← run the server in the foreground (developers)
 ├── scripts/                 ← your *.user.js files (kept out of git; example included)
 ├── server/                  ← local WebSocket + file-watch backend (PHP / Ratchet)
 │   ├── server.php           ← thin bootstrap (CLI parse · wire · run loop)

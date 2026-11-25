@@ -14,7 +14,7 @@
  *   - HistoryStore     — per-script version history under .history/.
  *   - ScriptSync       — the Ratchet WebSocket component tying it together.
  *
- * Usage:  php server.php [--port=8165] [--dir=../scripts] [--interval=1.0]
+ * Usage:  php server.php [--port=8165] [--host=127.0.0.1] [--dir=../scripts] [--interval=1.0]
  *
  * Requires:  composer install   (cboden/ratchet)
  */
@@ -38,17 +38,19 @@ use SayScript\ScriptSync;
  * CLI argument parsing
  * ------------------------------------------------------------------------ */
 
-$options = getopt('', ['port::', 'dir::', 'interval::', 'help']);
+$options = getopt('', ['port::', 'host::', 'dir::', 'interval::', 'help']);
 
 if (isset($options['help'])) {
     fwrite(STDOUT, "SayScript server\n");
     fwrite(STDOUT, "  --port=8165            WebSocket port\n");
+    fwrite(STDOUT, "  --host=127.0.0.1       Bind address (default: local machine only)\n");
     fwrite(STDOUT, "  --dir=../scripts       Folder containing .user.js files\n");
     fwrite(STDOUT, "  --interval=1.0         Filesystem poll interval in seconds\n");
     exit(0);
 }
 
 $port       = (int)($options['port'] ?? 8165);
+$host       = (string)($options['host'] ?? '127.0.0.1');
 $scriptsDir = $options['dir'] ?? (__DIR__ . '/../scripts');
 $interval   = (float)($options['interval'] ?? 1.0);
 
@@ -72,7 +74,7 @@ $sync    = new ScriptSync($repo, $history);
 $server = IoServer::factory(
     new HttpServer(new WsServer($sync)),
     $port,
-    '0.0.0.0'
+    $host
 );
 
 // Non-blocking filesystem watcher: a periodic timer on the React event loop.

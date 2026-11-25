@@ -22,3 +22,7 @@ desktop.ini
 
 # Note: your personal userscripts in /scripts are ignored by scripts/.gitignore
 # composer.lock IS committed (reproducible installs) — see server/.gitignore
+
+# Windows launcher/runtime + local Composer (downloaded by the installers)
+/runtime/
+/tools/

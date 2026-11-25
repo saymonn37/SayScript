@@ -12,6 +12,8 @@ echo   SayScript - setup ^& launch
 echo ================================================
 
 REM --- 1. prerequisites ---
+REM Prefer the portable PHP set up by Install-SayScript.bat
+if exist "%~dp0runtime\php\php.exe" set "PATH=%~dp0runtime\php;%PATH%"
 where php >nul 2>nul
 if errorlevel 1 (
   echo [ERROR] PHP not found in PATH.

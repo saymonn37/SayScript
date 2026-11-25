@@ -36,6 +36,17 @@ final class ScriptSync implements MessageComponentInterface
 
     public function onOpen(ConnectionInterface $conn): void
     {
+        // Security: any web page can open ws://localhost. Only the SayScript
+        // extension (chrome-extension:// origin) or non-browser clients (no
+        // Origin header) may talk to us — otherwise a random site could read
+        // and overwrite your userscripts.
+        $origin = $conn->httpRequest->getHeaderLine('Origin');
+        if ($origin !== '' && !str_starts_with($origin, 'chrome-extension://')) {
+            $this->log("Rejected connection from foreign origin: {$origin}");
+            $conn->close();
+            return;
+        }
+
         $this->clients->attach($conn);
         $this->log("Client connected (#{$conn->resourceId}). Total: " . $this->clients->count());
     }
